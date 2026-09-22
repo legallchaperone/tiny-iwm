@@ -28,3 +28,10 @@ Run `modal run scripts/modal_m1_gate.py`. The `prepare_assets` CPU function
 first downloads weights and creates the held-out validation clip in a persistent
 Modal Volume. Only the subsequent `run_gate` function requests a GPU, so cache
 misses and retries do not spend GPU time on downloads.
+
+## M2 correctness gate
+
+`python -m scripts.validate_m2_correctness` runs the deterministic CPU
+debug-size M2 gate. It connects Stage A batch construction, native Flow
+Matching, the joint DiT, camera PRoPE, backward gradients, and named probes.
+Pass `--output` to write the machine-readable report used by CWX-18.
