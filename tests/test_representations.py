@@ -179,6 +179,7 @@ class _OfficialCodecStub(nn.Module):
         return video * self.scale
 
     def decode(self, latents: torch.Tensor) -> torch.Tensor:
+        self.last_decode_dtype = latents.dtype
         return latents / self.scale
 
 
@@ -228,6 +229,23 @@ def test_sana_adapter_snapshots_injected_codec_state():
         model.scale.fill_(10.0)
 
     torch.testing.assert_close(adapter.encode(video), expected)
+
+
+def test_sana_adapter_restores_reduced_codec_dtype_before_decode():
+    normalizer = _normalizer()
+    adapter = SanaCausalVideoVAEAdapter(
+        _OfficialCodecStub().half(), spec=_codec(normalizer), normalizer=normalizer
+    )
+    video = torch.tensor([0.5, 1.0, 1.5, 3.0], dtype=torch.float16).view(
+        2, 2, 1, 1, 1
+    )
+
+    normalized = adapter.encode(video)
+    decoded = adapter.decode(normalized)
+
+    assert normalized.dtype == torch.float32
+    assert adapter._model.last_decode_dtype == torch.float16
+    torch.testing.assert_close(decoded, video)
 
 
 def test_codec_spec_rejects_normalization_channel_mismatch():
