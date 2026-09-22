@@ -4,8 +4,10 @@ from pathlib import Path
 
 import yaml
 from omegaconf import OmegaConf
+import pytest
 
 from scripts.write_run_records import compose_and_write
+import utils.provenance as provenance_module
 from utils.provenance import write_run_records
 
 
@@ -82,3 +84,115 @@ def test_no_training_command_composes_and_writes_without_wandb_credentials(tmp_p
     assert resolved.wandb.mode == "disabled"
     assert (tmp_path / "run" / "provenance.json").is_file()
     assert provenance["git"]["revision"]
+
+
+def test_existing_run_records_are_never_replaced(tmp_path):
+    project_root = tmp_path / "repository"
+    project_root.mkdir()
+    _make_repository(project_root)
+    output_dir = tmp_path / "run"
+    write_run_records(OmegaConf.create({"name": "original"}), output_dir, project_root)
+    original_config = (output_dir / "resolved_config.yaml").read_text()
+    original_provenance = (output_dir / "provenance.json").read_text()
+
+    with pytest.raises(FileExistsError, match="refusing to replace"):
+        write_run_records(OmegaConf.create({"name": "replacement"}), output_dir, project_root)
+
+    assert (output_dir / "resolved_config.yaml").read_text() == original_config
+    assert (output_dir / "provenance.json").read_text() == original_provenance
+
+
+def test_remote_credentials_are_removed_from_provenance(tmp_path):
+    project_root = tmp_path / "repository"
+    project_root.mkdir()
+    _make_repository(project_root)
+    _run_git(
+        project_root,
+        "remote",
+        "add",
+        "origin",
+        "https://user:top-secret@github.com:notaport/example/project.git?access_token=query-secret#fragment-secret",
+    )
+
+    provenance = write_run_records(OmegaConf.create({"name": "safe"}), tmp_path / "run", project_root)
+
+    assert provenance["git"]["origin"] == "https://github.com:notaport/example/project.git"
+    persisted = (tmp_path / "run" / "provenance.json").read_text()
+    assert "top-secret" not in persisted
+    assert "query-secret" not in persisted
+    assert "fragment-secret" not in persisted
+
+
+def test_unparsable_remote_authority_is_sanitized_as_opaque_text():
+    remote = "https://user:secret@[example.com/repo.git?access_token=query-secret"
+
+    sanitized = provenance_module._sanitize_remote_url(remote)
+
+    assert sanitized == "https://[example.com/repo.git"
+    assert "secret" not in sanitized
+
+
+def test_query_value_with_slash_never_becomes_a_remote_path():
+    remote = "https://host?access_token=/top-secret"
+
+    sanitized = provenance_module._sanitize_remote_url(remote)
+
+    assert sanitized == "https://host"
+    assert "top-secret" not in sanitized
+
+
+def test_temporary_record_is_removed_when_write_fails(tmp_path, monkeypatch):
+    original_factory = provenance_module.tempfile.NamedTemporaryFile
+    temporary_paths = []
+
+    class FailingWrite:
+        def __init__(self, temporary):
+            self.temporary = temporary
+            self.name = temporary.name
+
+        def __enter__(self):
+            self.temporary.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.temporary.__exit__(*args)
+
+        def write(self, _content):
+            raise OSError("simulated disk failure")
+
+    def failing_factory(*args, **kwargs):
+        temporary = original_factory(*args, **kwargs)
+        temporary_paths.append(Path(temporary.name))
+        return FailingWrite(temporary)
+
+    monkeypatch.setattr(provenance_module.tempfile, "NamedTemporaryFile", failing_factory)
+
+    with pytest.raises(OSError, match="simulated disk failure"):
+        provenance_module._atomic_create_files({tmp_path / "record.json": "secret"})
+
+    assert temporary_paths
+    assert all(not path.exists() for path in temporary_paths)
+
+
+def test_interrupt_rolls_back_partially_published_record_set(tmp_path, monkeypatch):
+    original_link = provenance_module.os.link
+    link_calls = 0
+
+    def interrupting_link(source, destination):
+        nonlocal link_calls
+        link_calls += 1
+        if link_calls == 2:
+            raise KeyboardInterrupt
+        return original_link(source, destination)
+
+    monkeypatch.setattr(provenance_module.os, "link", interrupting_link)
+    destinations = {
+        tmp_path / "resolved_config.yaml": "name: interrupted\n",
+        tmp_path / "provenance.json": "{}\n",
+    }
+
+    with pytest.raises(KeyboardInterrupt):
+        provenance_module._atomic_create_files(destinations)
+
+    assert all(not path.exists() for path in destinations)
+    assert not list(tmp_path.glob(".*.tmp"))

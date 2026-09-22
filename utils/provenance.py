@@ -9,6 +9,7 @@ import platform
 import socket
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
@@ -44,13 +45,33 @@ def _git(project_root: Path, *args: str) -> Optional[str]:
 
 def _git_record(project_root: Path) -> Dict[str, Any]:
     status = _git(project_root, "status", "--porcelain", "--untracked-files=normal")
+    origin = _git(project_root, "remote", "get-url", "origin")
     return {
         "revision": _git(project_root, "rev-parse", "HEAD"),
         "branch": _git(project_root, "branch", "--show-current"),
         "dirty": status is None or bool(status),
         "status_porcelain": status.splitlines() if status else [],
-        "origin": _git(project_root, "remote", "get-url", "origin"),
+        "origin": _sanitize_remote_url(origin),
     }
+
+
+def _sanitize_remote_url(url: Optional[str]) -> Optional[str]:
+    """Remove URL userinfo while preserving ordinary SSH/scp-style remotes."""
+
+    if not url or "://" not in url:
+        return url
+    # Treat Git's stored URL as opaque text. Git accepts authorities that strict
+    # URL parsers reject, including nonnumeric ports and unmatched IPv6 brackets.
+    scheme, remainder = url.split("://", 1)
+    # Remove these components before looking for a path because their values may
+    # themselves contain slashes that must never become persisted path text.
+    remainder = remainder.split("?", 1)[0].split("#", 1)[0]
+    authority, separator, tail = remainder.partition("/")
+    authority = authority.rsplit("@", 1)[-1]
+    path = f"/{tail}" if separator else ""
+    # Git remotes do not need URL queries or fragments for repository identity,
+    # and either component may carry tokens. Persist neither one.
+    return f"{scheme}://{authority}{path}"
 
 
 def _upstream_revisions(project_root: Path) -> Dict[str, str]:
@@ -112,10 +133,44 @@ def _runtime_record() -> Dict[str, Any]:
     }
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(content)
-    os.replace(temporary, path)
+def _atomic_create_files(contents: Mapping[Path, str]) -> None:
+    """Atomically publish new files and refuse to replace an existing record."""
+
+    existing = [path for path in contents if path.exists()]
+    if existing:
+        names = ", ".join(str(path) for path in existing)
+        raise FileExistsError(f"refusing to replace existing run record(s): {names}")
+
+    temporary_files: Dict[Path, Path] = {}
+    created = []
+    try:
+        for path, content in contents.items():
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                # Register the path before the first fallible write so the
+                # finally block also cleans up disk-full and I/O failures.
+                temporary_files[path] = Path(temporary.name)
+                temporary.write(content)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+
+        # Hard-link publication is atomic and fails if a concurrent writer created
+        # the destination. It therefore never replaces an existing run record.
+        for path, temporary in temporary_files.items():
+            os.link(temporary, path)
+            created.append(path)
+    except BaseException:
+        for path in created:
+            path.unlink(missing_ok=True)
+        raise
+    finally:
+        for temporary in temporary_files.values():
+            temporary.unlink(missing_ok=True)
 
 
 def write_run_records(cfg: DictConfig, output_dir: Path, project_root: Path) -> Dict[str, Any]:
@@ -136,6 +191,10 @@ def write_run_records(cfg: DictConfig, output_dir: Path, project_root: Path) -> 
         "seeds": _collect_seeds(resolved_container),
     }
 
-    _atomic_write(output_dir / "resolved_config.yaml", resolved_yaml)
-    _atomic_write(output_dir / "provenance.json", json.dumps(provenance, indent=2, sort_keys=True) + "\n")
+    _atomic_create_files(
+        {
+            output_dir / "resolved_config.yaml": resolved_yaml,
+            output_dir / "provenance.json": json.dumps(provenance, indent=2, sort_keys=True) + "\n",
+        }
+    )
     return provenance
