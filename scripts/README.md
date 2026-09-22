@@ -16,3 +16,15 @@ through the strict SANA reader and a frozen codec supplied by a local
 `module.path:factory`. It writes one atomic JSON report and exits nonzero if any
 sample fails reading, alignment, encode/decode, shape, or causality checks. See
 `python -m scripts.validate_m1_codec --help` for all required paths and options.
+
+The released streaming codec factory is
+`representations.sana_wm_streaming:create_official_sana_wm_streaming_codec`.
+It requires local paths in `SANA_WM_VAE_PATH` and `SANA_WM_UPSTREAM_PATH` and
+verifies the published 4.89 GB safetensors SHA-256 before loading.
+
+### Reproduce the official 961-frame run on Modal
+
+Run `modal run scripts/modal_m1_gate.py`. The `prepare_assets` CPU function
+first downloads weights and creates the held-out validation clip in a persistent
+Modal Volume. Only the subsequent `run_gate` function requests a GPU, so cache
+misses and retries do not spend GPU time on downloads.

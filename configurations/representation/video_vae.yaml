@@ -1,21 +1,18 @@
 kind: sana_causal_video_vae
 upstream: SANA
 frozen: true
-checkpoint: null       # unresolved pretrained codec weights
-weights_sha256: null   # required when a checkpoint is selected
-temporal_causal: null  # unresolved encoding convention
-spatial_compression: null
-temporal_compression: null
-latent_channels: null
-encoding_policy: null
-execution_dtype: null  # required; float16, bfloat16, float32, or float64
-execution_backend: null  # required; cpu, cuda, or mps
-backend_fingerprint: null  # required; generated from runtime and hardware
+checkpoint: hf://Efficient-Large-Model/SANA-WM_streaming/ltx2_causal_vae
+weights_sha256: 3694526c1da964fcf1ebccb70edb09895bf9e0a723b3ac48e0b5adf5bf97cc4a
+temporal_causal: true
+spatial_compression: [32, 32]
+temporal_compression: 8
+latent_channels: 128
+encoding_policy: official_causal_mode_temporal_tile_96_stride_64_v1
+execution_dtype: bfloat16
+execution_backend: cuda
+backend_fingerprint: runtime_generated
 cuda_math_policy: strict_no_tf32_no_reduced_reduction_v1
 normalization:
-  kind: frozen_channel_stats
-  training_split: train
-  training_data_version: null
-  statistics_sha256: null
-  mean: null
-  std: null
+  kind: upstream_checkpoint_channel_stats
+  source: checkpoint_buffers
+  training_data_version: SANA-WM_streaming@c7694938c854

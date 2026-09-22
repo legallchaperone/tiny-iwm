@@ -28,10 +28,15 @@ class SanaCausalVideoVAEAdapter(Representation):
         *,
         spec: CodecSpec,
         normalizer: ChannelNormalizer,
+        snapshot_model: bool = True,
     ) -> None:
         if normalizer.stats != spec.normalization:
             raise ValueError("normalizer statistics must match the codec specification")
-        self._model = deepcopy(model).eval()
+        # Small injected modules are copied by default so later caller mutation
+        # cannot silently change the codec identity.  The released SANA-WM VAE
+        # is almost 5 GB, so its explicit factory transfers ownership instead
+        # of making a second in-memory copy.
+        self._model = (deepcopy(model) if snapshot_model else model).eval()
         self._model.requires_grad_(False)
         state = _uniform_floating_model_state(self._model)
         if state is None:
