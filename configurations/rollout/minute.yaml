@@ -1,0 +1,8 @@
+rgb_frames: 961
+fps: 16
+duration_seconds: 60
+history_policy: full
+solver: null         # unresolved scientific choice
+sampling_steps: null # unresolved scientific choice
+cfg_scale: null      # unresolved, and only relevant when text is enabled
+seed: 0

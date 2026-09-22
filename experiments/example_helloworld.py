@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Optional, Union
 from lightning.pytorch.loggers.wandb import WandbLogger
 import numpy as np
-import cv2
 from omegaconf import DictConfig
 
 from experiments.exp_base import BaseExperiment
@@ -39,6 +38,10 @@ class HelloWorldExperiment(BaseExperiment):
         at the example `configurations/experiments/classification_experiment.yaml`, it has two tasks, which wil be run
         sequentially.
         """
+        # OpenCV is only needed by this example task. Keeping it out of module
+        # import allows configuration-only experiments to run on headless hosts.
+        import cv2
+
         if not self.algo:
             self.algo = self._build_algo()
 

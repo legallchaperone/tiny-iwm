@@ -1,0 +1,7 @@
+accelerator: gpu
+devices: 1
+num_nodes: 1
+precision: null             # unresolved after hardware profiling
+distributed_strategy: null
+num_workers: null
+deterministic: true

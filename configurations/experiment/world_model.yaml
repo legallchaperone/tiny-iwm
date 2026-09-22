@@ -1,0 +1,3 @@
+# Empty by design: M0 validates configuration without starting training.
+tasks: []
+seed: 0

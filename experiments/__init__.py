@@ -6,9 +6,11 @@ from lightning.pytorch.loggers.wandb import WandbLogger
 from .exp_base import BaseExperiment
 from .example_classification import ClassificationExperiment
 from .example_helloworld import HelloWorldExperiment
+from .world_model import WorldModelExperiment
 
 # each key has to be a yaml file under '[project_root]/configurations/experiment' without .yaml suffix
 exp_registry = dict(
+    world_model=WorldModelExperiment,
     example_classification=ClassificationExperiment,
     example_helloworld=HelloWorldExperiment,
 )

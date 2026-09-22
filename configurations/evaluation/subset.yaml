@@ -1,0 +1,5 @@
+protocol: sana_wm_official
+selection: subset
+manifest: null # unresolved fixed evaluation subset
+metrics: null  # unresolved official metric list/version
+seeds: null

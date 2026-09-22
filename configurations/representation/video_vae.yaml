@@ -1,0 +1,10 @@
+kind: frozen_video_autoencoder
+frozen: true
+checkpoint: null       # unresolved pretrained codec weights
+temporal_causal: null  # unresolved encoding convention
+spatial_compression: null
+temporal_compression: null
+latent_channels: null
+normalization:
+  mean: null
+  std: null
