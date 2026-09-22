@@ -73,6 +73,22 @@ class CheckpointProvenance:
 
 
 @dataclass(frozen=True)
+class CheckpointCompatibility:
+    """Required parent provenance fields checked before any weight mutation."""
+
+    model: Mapping[str, Any]
+    codec: Mapping[str, Any]
+    camera: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        for name in ("model", "codec", "camera"):
+            value = getattr(self, name)
+            if not value:
+                raise ValueError(f"expected {name} compatibility must be non-empty")
+            _json_snapshot(value)
+
+
+@dataclass(frozen=True)
 class InitializedStage:
     optimizer: torch.optim.Optimizer
     scheduler: torch.optim.lr_scheduler.LRScheduler
@@ -148,9 +164,18 @@ def initialize_new_stage(
     ema_decay: float,
     source_weights: str = "model",
     ema_rule: str = "copy_loaded_model",
+    expected_compatibility: CheckpointCompatibility | None = None,
 ) -> InitializedStage:
     """Load weights only, then create fresh state for a different stage."""
     payload, checkpoint_id = _load(path)
+    if expected_compatibility is not None:
+        provenance = payload["provenance"]
+        for name in ("model", "codec", "camera"):
+            _require_subset(
+                provenance[name],
+                getattr(expected_compatibility, name),
+                path=name,
+            )
     if source_weights == "model":
         state = payload["model"]
     elif source_weights == "ema":
@@ -253,3 +278,19 @@ def _json_snapshot(value: Mapping[str, Any]) -> dict[str, Any]:
         return json.loads(json.dumps(value, sort_keys=True))
     except (TypeError, ValueError) as error:
         raise ValueError("checkpoint provenance must be JSON serializable") from error
+
+
+def _require_subset(actual: Any, expected: Any, *, path: str) -> None:
+    if isinstance(expected, Mapping):
+        if not isinstance(actual, Mapping):
+            raise ValueError(f"checkpoint compatibility mismatch at {path}")
+        for key, value in expected.items():
+            if key not in actual:
+                raise ValueError(f"checkpoint compatibility missing {path}.{key}")
+            _require_subset(actual[key], value, path=f"{path}.{key}")
+        return
+    if actual != expected:
+        raise ValueError(
+            f"checkpoint compatibility mismatch at {path}: "
+            f"checkpoint={actual!r}, expected={expected!r}"
+        )

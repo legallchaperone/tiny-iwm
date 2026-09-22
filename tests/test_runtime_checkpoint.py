@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 from runtime import (
+    CheckpointCompatibility,
     CheckpointProvenance,
     CheckpointSelection,
     ExponentialMovingAverage,
@@ -176,6 +177,66 @@ def test_init_from_loads_only_selected_weights_and_resets_training_state(
         assert torch.equal(value, expected[name])
         if value.is_floating_point():
             assert torch.equal(initialized.ema.shadow[name], value)
+
+
+def test_stage_transition_checks_compatibility_before_loading_weights(tmp_path):
+    source = _model()
+    optimizer, scheduler, ema = _runtime(source)
+    path = tmp_path / "stage-a.pt"
+    save_checkpoint(
+        path,
+        model=source,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        ema=ema,
+        global_step=4,
+        epoch=1,
+        provenance=_provenance(),
+    )
+    target = _model()
+    before = {name: value.clone() for name, value in target.state_dict().items()}
+    with pytest.raises(ValueError, match="codec.id"):
+        initialize_new_stage(
+            path,
+            model=target,
+            optimizer_factory=lambda model: build_optimizer(model, OptimizerSpec()),
+            scheduler_factory=lambda value: build_scheduler(value, SchedulerSpec()),
+            ema_decay=0.95,
+            source_weights="ema",
+            expected_compatibility=CheckpointCompatibility(
+                model={"architecture": "tiny-test", "width": 5},
+                codec={"id": "wrong-codec", "causal": True},
+                camera={"method": "tiled_prope", "pose": "c2w"},
+            ),
+        )
+    for name, value in target.state_dict().items():
+        assert torch.equal(value, before[name])
+
+
+def test_stage_transition_accepts_subset_compatibility(tmp_path):
+    source = _model()
+    optimizer, scheduler, ema = _runtime(source)
+    path = tmp_path / "stage-a.pt"
+    save_checkpoint(
+        path, model=source, optimizer=optimizer, scheduler=scheduler, ema=ema,
+        global_step=4, epoch=1, provenance=_provenance(),
+    )
+    target = _model()
+    initialized = initialize_new_stage(
+        path,
+        model=target,
+        optimizer_factory=lambda model: build_optimizer(model, OptimizerSpec()),
+        scheduler_factory=lambda value: build_scheduler(value, SchedulerSpec()),
+        ema_decay=0.95,
+        source_weights="ema",
+        expected_compatibility=CheckpointCompatibility(
+            model={"architecture": "tiny-test"},
+            codec={"causal": True},
+            camera={"pose": "c2w"},
+        ),
+    )
+    assert initialized.global_step == 0
+    assert initialized.parent_checkpoint_id.startswith("sha256:")
 
 
 def test_checkpoint_requires_complete_json_provenance():

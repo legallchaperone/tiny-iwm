@@ -1,9 +1,17 @@
 name: causal_tf
 attention_visibility: chunk_causal
 teacher_forcing: true
-initial_checkpoint: null # must point to this project's Stage A checkpoint
+initial_checkpoint: /stage-a/checkpoints/stage-a-best.pt
+initial_weights: ema
+parent_checkpoint_id: sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1
+optimizer_initialization: fresh_adamw
+scheduler_initialization: fresh_constant
+progress_initialization: {global_step: 0, epoch: 0}
+ema_initialization: copy_loaded_model
 chunk_duration_seconds: 2.0
 latent_frames_per_chunk: 4
 target_selection: uniform_nonempty_chunk
 clean_history: teacher_forced
 future_clean_storage: present_but_causally_invisible
+df_timestep_mixture: false
+self_rollout_loss: false
