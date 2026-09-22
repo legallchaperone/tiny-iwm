@@ -14,6 +14,66 @@ from core.camera import CameraCondition
 from core.video_layout import VideoLayout
 
 
+_CONTAINER_TAG = "__tiny_iwm_container__"
+
+
+class _FrozenDict(dict):
+    """A JSON/pickle-friendly dictionary that rejects mutation after creation."""
+
+    def _immutable(self, *_args: Any, **_kwargs: Any) -> None:
+        raise TypeError("frozen mapping does not support mutation")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+    __ior__ = _immutable
+
+    def __reduce__(self):
+        return type(self), (dict(self),)
+
+
+def _freeze_value(value: Any) -> Any:
+    """Snapshot common mutable containers without copying tensor-like leaves."""
+
+    if isinstance(value, _FrozenDict):
+        return value
+    if isinstance(value, Mapping):
+        frozen_items = tuple(
+            sorted(
+                ((key, _freeze_value(child)) for key, child in value.items()),
+                key=lambda item: _canonical_sort_key(item[0]),
+            )
+        )
+        if _CONTAINER_TAG in value:
+            return _FrozenDict({_CONTAINER_TAG: "mapping", "items": frozen_items})
+        return _FrozenDict(frozen_items)
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_value(child) for child in value)
+    if isinstance(value, (set, frozenset)):
+        frozen = (_freeze_value(child) for child in value)
+        return _FrozenDict(
+            {
+                _CONTAINER_TAG: "set",
+                "items": tuple(sorted(frozen, key=_canonical_sort_key)),
+            }
+        )
+    return value
+
+
+def _canonical_sort_key(value: Any) -> Tuple[str, str]:
+    """Order hashable set members consistently across Python processes."""
+
+    value_type = type(value)
+    type_name = f"{value_type.__module__}.{value_type.__qualname__}"
+    if isinstance(value, tuple):
+        return type_name, repr(tuple(_canonical_sort_key(child) for child in value))
+    return type_name, repr(value)
+
+
 @dataclass(frozen=True)
 class LatentSpec:
     """Identity and layout of ``[B, C, T, H, W]`` codec latents."""
@@ -59,6 +119,8 @@ class VideoBatch:
     def __post_init__(self) -> None:
         if not self.sample_ids or len(self.sample_ids) != len(self.sources):
             raise ValueError("sample_ids and sources must be non-empty and aligned")
+        if self.text is not None and len(self.text) != len(self.sample_ids):
+            raise ValueError("text must align one-to-one with sample_ids")
         if self.video is None and self.latents is None:
             raise ValueError("VideoBatch requires video, latents, or both")
 
@@ -92,6 +154,10 @@ class RolloutResult:
     seed: int
     conditions: Mapping[str, Any]
     inference_settings: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "conditions", _freeze_value(self.conditions))
+        object.__setattr__(self, "inference_settings", _freeze_value(self.inference_settings))
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,11 @@
+import json
+import pickle
+from dataclasses import asdict, replace
+
 import pytest
 
 from core.camera import CameraCondition, IntrinsicsSpace
-from core.types import LatentSpec, ProbeEvent, VideoBatch
+from core.types import LatentSpec, ProbeEvent, RolloutResult, VideoBatch
 from core.video_layout import FrameRange, VideoLayout
 
 
@@ -71,6 +75,114 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
     assert latent_spec.encoding_policy == "prefix_causal"
     assert camera.extrinsics_convention == "camera_to_world"
     assert batch.sample_ids == ("scene-1",)
+
+
+def test_video_batch_rejects_misaligned_text():
+    camera = CameraCondition(
+        c2w="[B,T,4,4]",
+        intrinsics="[B,T,3,3]",
+        timestamps_seconds="[B,T]",
+        intrinsics_space=IntrinsicsSpace.RGB_PIXELS,
+    )
+    with pytest.raises(ValueError, match="text must align"):
+        VideoBatch(
+            sample_ids=("a", "b"),
+            sources=("a.mp4", "b.mp4"),
+            layout=_layout(),
+            camera=camera,
+            video=object(),
+            text=("only one caption",),
+        )
+
+
+def test_rollout_result_snapshots_and_freezes_identity_mappings():
+    conditions = {"camera": {"angles": [1.0, 2.0]}, "tags": {"z", "a", 3}}
+    settings = {"steps": 8}
+    result = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions=conditions,
+        inference_settings=settings,
+    )
+
+    conditions["camera"]["angles"].append(3.0)
+    settings["steps"] = 16
+
+    assert result.conditions["camera"]["angles"] == (1.0, 2.0)
+    assert result.inference_settings["steps"] == 8
+    with pytest.raises(TypeError):
+        result.conditions["camera"] = {}
+    alias = result.conditions
+    with pytest.raises(TypeError):
+        alias |= {"new": "value"}
+    assert "new" not in result.conditions
+    assert result.conditions["tags"] == {
+        "__tiny_iwm_container__": "set",
+        "items": (3, "a", "z"),
+    }
+
+    restored = pickle.loads(pickle.dumps(result))
+    serialized = asdict(result)
+    assert restored.conditions == result.conditions
+    assert serialized["conditions"] == result.conditions
+    assert json.loads(json.dumps(result.conditions))["camera"]["angles"] == [1.0, 2.0]
+
+    reordered = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={"tags": set([3, "z", "a"]), "camera": {"angles": [1.0, 2.0]}},
+        inference_settings={"steps": 8},
+    )
+    assert reordered.conditions == result.conditions
+
+    ordered = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={"tags": [3, "a", "z"], "camera": {"angles": [1.0, 2.0]}},
+        inference_settings={"steps": 8},
+    )
+    assert ordered.conditions != result.conditions
+    assert json.dumps(ordered.conditions) != json.dumps(result.conditions)
+
+    marker_shaped_mapping = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={
+            "tags": {"__tiny_iwm_container__": "set", "items": [3, "a", "z"]},
+            "camera": {"angles": [1.0, 2.0]},
+        },
+        inference_settings={"steps": 8},
+    )
+    assert marker_shaped_mapping.conditions != result.conditions
+    assert json.dumps(marker_shaped_mapping.conditions) != json.dumps(result.conditions)
+
+    reordered_marker_mapping = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={
+            "camera": {"angles": [1.0, 2.0]},
+            "tags": {"items": [3, "a", "z"], "__tiny_iwm_container__": "set"},
+        },
+        inference_settings={"steps": 8},
+    )
+    assert reordered_marker_mapping.conditions == marker_shaped_mapping.conditions
+    assert json.dumps(reordered_marker_mapping.conditions) == json.dumps(
+        marker_shaped_mapping.conditions
+    )
+
+    reconstructed = replace(result)
+    assert reconstructed == result
+    assert json.dumps(reconstructed.conditions) == json.dumps(result.conditions)
 
 
 def test_probe_event_carries_complete_run_and_position_identity():
