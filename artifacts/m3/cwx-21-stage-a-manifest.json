@@ -1,0 +1,321 @@
+{
+  "issue": "CWX-21",
+  "manifest_sha256": "sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf",
+  "run_id": "stage-a-sekai-subset-seed21-v1",
+  "schema_version": 1,
+  "selection": {
+    "algorithm": "first_sample_per_sorted_scene",
+    "scene_disjoint": true,
+    "train_scenes": 16,
+    "validation_policy": "last_sorted_scenes",
+    "validation_scenes": 4
+  },
+  "source": {
+    "camera_file": "data/sekai_game_train_961frames_16fps_ovl640/sekai_game_train_00000000_camera.npz",
+    "latent_zip": "data/vae_cache/LTX2VAE_diffusers_704x1280/sekai_game_train_961frames_16fps_ovl640/sekai_game_train_00000000.zip",
+    "license": "fair-noncommercial-research-license",
+    "repository": "Efficient-Large-Model/SANA-WM-example-training-dataset",
+    "revision": "4d965e94b9ea11b9c5ba085251ffa7a0345e006f"
+  },
+  "splits": {
+    "train": [
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100100001_0004650_0006450_s000000.npz",
+        "sample_id": "00100100001_0004650_0006450_s000000",
+        "scene_id": "00100100001",
+        "sha256": "sha256:292e34e1fa6bdd8d9528d9abd8f91bffeda21b6f1cb6d80fd188dd8672528423",
+        "source_member": "00100100001_0004650_0006450_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100100002_0001050_0002850_s000000.npz",
+        "sample_id": "00100100002_0001050_0002850_s000000",
+        "scene_id": "00100100002",
+        "sha256": "sha256:16528b67ba5bc41e020ba4d6d4c34a5dc44fe7a11a4a2a3eac052a8da54d4aee",
+        "source_member": "00100100002_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100100003_0001050_0002850_s000000.npz",
+        "sample_id": "00100100003_0001050_0002850_s000000",
+        "scene_id": "00100100003",
+        "sha256": "sha256:60b7d88f47a27bcd7d9753b6e654d83cd66b1903ccb79213c3855f06de836928",
+        "source_member": "00100100003_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100200001_0002938_0004738_s000000.npz",
+        "sample_id": "00100200001_0002938_0004738_s000000",
+        "scene_id": "00100200001",
+        "sha256": "sha256:fb1808cc8fdf7da91070c4c7e2eab35cc606186fdfdd0c951641c2ad37e677f4",
+        "source_member": "00100200001_0002938_0004738_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100200002_0001050_0002850_s000000.npz",
+        "sample_id": "00100200002_0001050_0002850_s000000",
+        "scene_id": "00100200002",
+        "sha256": "sha256:b0599ad30cdb0a519da5906b2109310f0d4262dabcb4829f928d7533df4c3903",
+        "source_member": "00100200002_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100200003_0001050_0002850_s000000.npz",
+        "sample_id": "00100200003_0001050_0002850_s000000",
+        "scene_id": "00100200003",
+        "sha256": "sha256:fbc8a12c2fbc13d96325af6e773d0537426d2906c05fa96e51af5f4df6736fc5",
+        "source_member": "00100200003_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100300001_0001050_0002850_s000000.npz",
+        "sample_id": "00100300001_0001050_0002850_s000000",
+        "scene_id": "00100300001",
+        "sha256": "sha256:9de46c87861779383a2f47cb0fd7661de9b92ff9f55ae2d178fd87790f4b186e",
+        "source_member": "00100300001_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100300002_0001050_0002850_s000000.npz",
+        "sample_id": "00100300002_0001050_0002850_s000000",
+        "scene_id": "00100300002",
+        "sha256": "sha256:c6820608cf7649bea7ed14a54a81f9ef53437ff48f33149ca2c53861f6a811fb",
+        "source_member": "00100300002_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00100300003_0001050_0002850_s000000.npz",
+        "sample_id": "00100300003_0001050_0002850_s000000",
+        "scene_id": "00100300003",
+        "sha256": "sha256:06cfa3b089855ee239c64bb179c318b2ea8011821c9056ae9915f67f301b2e7d",
+        "source_member": "00100300003_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200100001_0001050_0002850_s000000.npz",
+        "sample_id": "00200100001_0001050_0002850_s000000",
+        "scene_id": "00200100001",
+        "sha256": "sha256:02d2cfc3243ed90a381bc7b30e46d0c329357669cab1def7ba543e783a7219cb",
+        "source_member": "00200100001_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200100002_0001050_0002850_s000000.npz",
+        "sample_id": "00200100002_0001050_0002850_s000000",
+        "scene_id": "00200100002",
+        "sha256": "sha256:ce5b5b69ed828ea9c41cf4c5dc8d16ab654b2d538cdace5d53c8dd188dedb3a0",
+        "source_member": "00200100002_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200100003_0001050_0002850_s000000.npz",
+        "sample_id": "00200100003_0001050_0002850_s000000",
+        "scene_id": "00200100003",
+        "sha256": "sha256:a54c659ebddd625874f77701afbff9de572897800c1a84b7fe04eba51979920d",
+        "source_member": "00200100003_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200200001_0001050_0002850_s000000.npz",
+        "sample_id": "00200200001_0001050_0002850_s000000",
+        "scene_id": "00200200001",
+        "sha256": "sha256:18fc1f0cf82c25d38bc55bf6df1308a60b2e775e38300ba470b5b07cac5380b3",
+        "source_member": "00200200001_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200200002_0001050_0002850_s000000.npz",
+        "sample_id": "00200200002_0001050_0002850_s000000",
+        "scene_id": "00200200002",
+        "sha256": "sha256:0b506478e6f0d977b8b121b4d33aad842b524acbd1c068334958295cdb6bf279",
+        "source_member": "00200200002_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200200003_0001050_0002850_s000000.npz",
+        "sample_id": "00200200003_0001050_0002850_s000000",
+        "scene_id": "00200200003",
+        "sha256": "sha256:1f8d9927e53e1f40308907b8cda1608f11320be1eaf5c6cdcffa028a7baaae9e",
+        "source_member": "00200200003_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/train/00200300001_0001050_0002850_s000000.npz",
+        "sample_id": "00200300001_0001050_0002850_s000000",
+        "scene_id": "00200300001",
+        "sha256": "sha256:16659f23a091641c2a17b6639df5d3b7905bffd4c574f570b749bcb80fd41252",
+        "source_member": "00200300001_0001050_0002850_s000000.npz"
+      }
+    ],
+    "validation": [
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/validation/00900100002_0001050_0002850_s000000.npz",
+        "sample_id": "00900100002_0001050_0002850_s000000",
+        "scene_id": "00900100002",
+        "sha256": "sha256:b4b6a5bbda9e1dd898e2e67c917b8291819443469611f1ae0945b7033b946aec",
+        "source_member": "00900100002_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/validation/00900100003_0001050_0002850_s000000.npz",
+        "sample_id": "00900100003_0001050_0002850_s000000",
+        "scene_id": "00900100003",
+        "sha256": "sha256:06ba529cb21b41e4b26d65ecf7fd76da1ce9d7c3140e4a55adf3ffc5e90bdead",
+        "source_member": "00900100003_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/validation/00900200001_0001050_0002850_s000000.npz",
+        "sample_id": "00900200001_0001050_0002850_s000000",
+        "scene_id": "00900200001",
+        "sha256": "sha256:a9c6bdbd1a005f1830502544c98cfbed93318fa7d043cc78717e17ea528109ca",
+        "source_member": "00900200001_0001050_0002850_s000000.npz"
+      },
+      {
+        "camera_frames": 961,
+        "latent_shape": [
+          128,
+          121,
+          4,
+          4
+        ],
+        "prepared_path": "/stage-a/samples/validation/00900200002_0001050_0002850_s000000.npz",
+        "sample_id": "00900200002_0001050_0002850_s000000",
+        "scene_id": "00900200002",
+        "sha256": "sha256:bd75b35338a8cc72d8d1bf0c1e8e1e47b8c64f4be4462a425c0cd4d6575ce3bb",
+        "source_member": "00900200002_0001050_0002850_s000000.npz"
+      }
+    ]
+  },
+  "transform": {
+    "camera_intrinsics": [
+      "resize_rgb:1080x1920->720x1280",
+      "crop_rgb:left=0,top=8,size=704x1280",
+      "crop_rgb:left=576,top=288,size=128x128"
+    ],
+    "latent_crop_size": [
+      4,
+      4
+    ],
+    "latent_crop_yx": [
+      9,
+      18
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+schema_version: 1
+run_id: stage-a-sekai-subset-seed21-v1
+issue: CWX-21
+seed: 21
+stage: A
+
+data:
+  repository: Efficient-Large-Model/SANA-WM-example-training-dataset
+  revision: 4d965e94b9ea11b9c5ba085251ffa7a0345e006f
+  license: fair-noncommercial-research-license
+  source_split: sekai_game_train_961frames_16fps_ovl640
+  selection: first_sample_per_sorted_scene
+  train_scenes: 16
+  validation_scenes: 4
+  validation_scene_policy: last_sorted_scenes
+  scene_disjoint: true
+  prepared_volume: tiny-iwm-stage-a
+  latent_crop_yx: [9, 18]
+  latent_crop_size: [4, 4]
+  rgb_size_before_crop: [704, 1280]
+  rgb_crop_top_left: [288, 576]
+  rgb_crop_size: [128, 128]
+
+model:
+  architecture: joint_spatiotemporal_dit
+  initialization: random
+  latent_channels: 128
+  depth: 24
+  hidden_size: 832
+  num_heads: 16
+  patch_size: [1, 2, 2]
+  mlp_ratio: 4.0
+  qkv_bias: true
+  prope_camera_dims: 48
+
+flow_matching:
+  convention: t0_clean_t1_noise
+  time_distribution: uniform
+  loss_weighting: uniform
+  visibility: bidirectional
+
+optimization:
+  steps: 100
+  batch_size: 1
+  optimizer: AdamW
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  scheduler: constant
+  ema_decay: 0.9999
+
+validation:
+  steps: [50, 100]
+  weights: ema
+  deterministic_noise_seed: 21000
+  flow_time: 0.5
+  metric: flow_matching_mse
+  selection: lowest_validation_flow_matching_mse
+
+runtime:
+  platform: Modal
+  gpu: A10G
+  precision: bfloat16
+  cuda_math_policy: strict_no_tf32_no_reduced_reduction_v1
+  activation_checkpointing: false
+  gradient_accumulation: 1
+
+checkpoint:
+  path: /stage-a/checkpoints/stage-a-best.pt
+  format: resumable_runtime_schema_v1
+  save_selected_only: true
+  selection_weights: ema

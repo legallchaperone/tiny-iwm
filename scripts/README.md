@@ -45,3 +45,13 @@ GPU function records training and 16-step rollout time, peak CUDA memory,
 parameters, tokens, projected KV size, attention settings, and hardware. It
 also compares resolution and patch alternatives while holding 961 frames,
 16 FPS, and 60 seconds fixed.
+
+## Stage A baseline
+
+`modal run scripts/modal_stage_a_train.py` reproduces the CWX-21 baseline. A
+CPU function uses HTTP Range requests to extract a fixed, scene-disjoint subset
+from the pinned official SANA-WM latent archive and writes it to the persistent
+`tiny-iwm-stage-a` Volume. The A10G function starts only after preparation and
+does not download anything. It trains 100 steps, validates EMA weights at steps
+50 and 100, and keeps the lowest validation-loss checkpoint with complete
+same-run resume state in the Volume.
