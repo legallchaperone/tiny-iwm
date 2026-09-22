@@ -1,6 +1,13 @@
 The `datasets` folder is used to contain dataset code or environment code.
 Don't store actual data like images here! For those, please use the `data` folder instead of `datasets`.
 
+`datasets/sana_wm` implements the strict M1 adapter. Its JSON manifest is the
+source of truth for sample identity, source scene, split, and data version.
+Paths are relative to `dataset.data_root`. Missing or malformed video, camera,
+or metadata files raise `SampleReadError`; training code should record that
+failure and exclude the sample rather than inventing camera values. Image
+resize/crop must call the paired transforms so RGB-pixel intrinsics stay aligned.
+
 Create a folder to create your own pytorch dataset definition. Then, update the `__init__.py`
 at every level to register all datasets.
 
