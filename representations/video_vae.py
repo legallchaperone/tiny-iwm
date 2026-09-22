@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from copy import deepcopy
+from threading import RLock
+from typing import Iterator
 
 import torch
 from torch import nn
 
 from representations.base import CodecSpec, Representation
 from representations.normalization import ChannelNormalizer
+
+
+_TF32_POLICY_LOCK = RLock()
 
 
 class SanaCausalVideoVAEAdapter(Representation):
@@ -47,8 +53,8 @@ class SanaCausalVideoVAEAdapter(Representation):
         codec_video = video.to(dtype=self._codec_dtype)
         _validate_video_tensor(codec_video, "codec video")
         self._model.eval()
-        with torch.no_grad(), torch.autocast(
-            device_type=codec_video.device.type, enabled=False
+        with torch.no_grad(), _codec_math_mode(
+            codec_video.device.type, self._codec_dtype
         ):
             latents = self._model.encode(codec_video)
         _validate_video_tensor(latents, "codec latents")
@@ -63,9 +69,7 @@ class SanaCausalVideoVAEAdapter(Representation):
             latents = latents.to(dtype=self._codec_dtype)
         _validate_video_tensor(latents, "codec latents")
         self._model.eval()
-        with torch.no_grad(), torch.autocast(
-            device_type=latents.device.type, enabled=False
-        ):
+        with torch.no_grad(), _codec_math_mode(latents.device.type, self._codec_dtype):
             video = self._model.decode(latents)
         _validate_video_tensor(video, "decoded video")
         return video
@@ -91,3 +95,25 @@ def _uniform_floating_model_dtype(model: nn.Module) -> torch.dtype | None:
 
 def _dtype_name(dtype: torch.dtype) -> str:
     return str(dtype).removeprefix("torch.")
+
+
+@contextmanager
+def _codec_math_mode(
+    device_type: str, dtype: torch.dtype
+) -> Iterator[None]:
+    """Run with declared precision, isolated from ambient autocast and TF32."""
+
+    with torch.autocast(device_type=device_type, enabled=False):
+        if device_type != "cuda" or dtype != torch.float32:
+            yield
+            return
+        with _TF32_POLICY_LOCK:
+            cudnn_tf32 = torch.backends.cudnn.allow_tf32
+            matmul_tf32 = torch.backends.cuda.matmul.allow_tf32
+            try:
+                torch.backends.cudnn.allow_tf32 = False
+                torch.backends.cuda.matmul.allow_tf32 = False
+                yield
+            finally:
+                torch.backends.cudnn.allow_tf32 = cudnn_tf32
+                torch.backends.cuda.matmul.allow_tf32 = matmul_tf32

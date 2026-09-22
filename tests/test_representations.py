@@ -12,6 +12,7 @@ from representations import (
     NormalizationStats,
     SanaCausalVideoVAEAdapter,
 )
+from representations.video_vae import _codec_math_mode
 
 
 def _normalizer() -> ChannelNormalizer:
@@ -339,3 +340,19 @@ def test_sana_adapter_disables_ambient_autocast_for_codec_calls():
 
     assert adapter._model.last_encode_dtype == torch.float32
     assert adapter._model.last_decode_dtype == torch.float32
+
+
+def test_cuda_float32_math_mode_pins_and_restores_tf32_policy():
+    original_cudnn = torch.backends.cudnn.allow_tf32
+    original_matmul = torch.backends.cuda.matmul.allow_tf32
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cuda.matmul.allow_tf32 = True
+    try:
+        with _codec_math_mode("cuda", torch.float32):
+            assert not torch.backends.cudnn.allow_tf32
+            assert not torch.backends.cuda.matmul.allow_tf32
+        assert torch.backends.cudnn.allow_tf32
+        assert torch.backends.cuda.matmul.allow_tf32
+    finally:
+        torch.backends.cudnn.allow_tf32 = original_cudnn
+        torch.backends.cuda.matmul.allow_tf32 = original_matmul
