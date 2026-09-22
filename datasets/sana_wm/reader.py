@@ -108,6 +108,13 @@ class SANAReader:
             raise SampleReadError(
                 record.sample_id, "camera", f"missing fields: {', '.join(sorted(missing))}"
             )
+        for field in ("c2w", "intrinsics", "timestamps_seconds"):
+            if not _is_numeric_json_array(payload[field]):
+                raise SampleReadError(
+                    record.sample_id,
+                    "camera",
+                    f"{field} must contain only JSON numbers",
+                )
         try:
             c2w = np.asarray(payload["c2w"], dtype=np.float64)
             intrinsics = np.asarray(payload["intrinsics"], dtype=np.float64)
@@ -151,3 +158,11 @@ class SANAReader:
         if not isinstance(payload, dict):
             raise SampleReadError(record.sample_id, "metadata", "root must be an object")
         return payload
+
+
+def _is_numeric_json_array(value: object) -> bool:
+    """Accept nested JSON arrays whose leaves are numbers, excluding booleans."""
+
+    if isinstance(value, list):
+        return all(_is_numeric_json_array(item) for item in value)
+    return isinstance(value, (int, float)) and not isinstance(value, bool)

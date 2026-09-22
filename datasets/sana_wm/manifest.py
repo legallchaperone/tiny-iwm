@@ -108,7 +108,7 @@ class Manifest:
                 )
 
     def for_split(self, split: Split) -> Tuple[ManifestRecord, ...]:
-        if split not in _VALID_SPLITS:
+        if not isinstance(split, str) or split not in _VALID_SPLITS:
             raise ValueError(f"unsupported split {split!r}")
         return tuple(record for record in self.records if record.split == split)
 

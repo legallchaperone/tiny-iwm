@@ -44,6 +44,14 @@ def test_manifest_rejects_non_string_split_with_validation_error(split):
         _record(split=split).validate()
 
 
+@pytest.mark.parametrize("split", [[], {}, 1, None])
+def test_manifest_selector_rejects_non_string_split_with_validation_error(split):
+    manifest = Manifest(1, "data-v1", (_record(),))
+
+    with pytest.raises(ValueError, match="unsupported split"):
+        manifest.for_split(split)
+
+
 @pytest.mark.parametrize("schema_version", [True, 1.0, "1"])
 def test_manifest_requires_exact_integer_schema_version(schema_version):
     with pytest.raises(ValueError, match="unsupported manifest schema_version"):
@@ -155,6 +163,26 @@ def test_numeric_camera_overflow_becomes_sample_failure(tmp_path):
     )
 
     with pytest.raises(SampleReadError, match="camera error: non-numeric values"):
+        SANAReader(tmp_path)._read_camera(record)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [("c2w", True), ("intrinsics", "1.0"), ("timestamps_seconds", False)],
+)
+def test_camera_rejects_json_values_that_are_not_numbers(tmp_path, field, invalid_value):
+    record = _record()
+    camera_path = tmp_path / record.camera_path
+    camera_path.parent.mkdir()
+    payload = {
+        "c2w": [np.eye(4).tolist()],
+        "intrinsics": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]],
+        "timestamps_seconds": [0],
+    }
+    payload[field][0] = invalid_value
+    camera_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(SampleReadError, match=f"{field} must contain only JSON numbers"):
         SANAReader(tmp_path)._read_camera(record)
 
 
