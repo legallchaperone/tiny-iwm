@@ -37,9 +37,27 @@ def validate_preflight_config(cfg: DictConfig) -> None:
         raise ValueError(f"implicit pretrained DiT loading is forbidden; configured fields: {names}")
 
     checkpoint = cfg.get("checkpoint", {})
-    init_from = checkpoint.get("init_from")
-    resume_from = checkpoint.get("resume_from")
-    if init_from and resume_from:
+    init_selectors = {
+        name: value
+        for name, value in {
+            "checkpoint.init_from": checkpoint.get("init_from"),
+            "load": cfg.get("load"),
+        }.items()
+        if value
+    }
+    resume_selectors = {
+        name: value
+        for name, value in {
+            "checkpoint.resume_from": checkpoint.get("resume_from"),
+            "resume": cfg.get("resume"),
+        }.items()
+        if value
+    }
+    if len(init_selectors) > 1:
+        raise ValueError(f"multiple initialization selectors configured: {', '.join(init_selectors)}")
+    if len(resume_selectors) > 1:
+        raise ValueError(f"multiple resume selectors configured: {', '.join(resume_selectors)}")
+    if init_selectors and resume_selectors:
         raise ValueError("checkpoint.init_from and checkpoint.resume_from are mutually exclusive")
 
 

@@ -61,3 +61,39 @@ def test_preflight_accepts_each_checkpoint_mode_individually():
     resume_cfg = _baseline_config()
     resume_cfg.checkpoint.resume_from = "interrupted.ckpt"
     validate_preflight_config(resume_cfg)
+
+
+@pytest.mark.parametrize(
+    ("legacy_selector", "checkpoint_selector"),
+    [
+        ("resume", "init_from"),
+        ("load", "resume_from"),
+    ],
+)
+def test_preflight_rejects_legacy_selector_mixed_with_opposite_mode(
+    legacy_selector, checkpoint_selector
+):
+    cfg = _baseline_config()
+    cfg[legacy_selector] = "legacy-checkpoint"
+    cfg.checkpoint[checkpoint_selector] = "explicit-checkpoint"
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        validate_preflight_config(cfg)
+
+
+@pytest.mark.parametrize(
+    ("legacy_selector", "checkpoint_selector", "message"),
+    [
+        ("load", "init_from", "multiple initialization selectors"),
+        ("resume", "resume_from", "multiple resume selectors"),
+    ],
+)
+def test_preflight_rejects_duplicate_legacy_and_explicit_selectors(
+    legacy_selector, checkpoint_selector, message
+):
+    cfg = _baseline_config()
+    cfg[legacy_selector] = "legacy-checkpoint"
+    cfg.checkpoint[checkpoint_selector] = "explicit-checkpoint"
+
+    with pytest.raises(ValueError, match=message):
+        validate_preflight_config(cfg)
