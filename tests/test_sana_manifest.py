@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from datasets.sana_wm.manifest import Manifest, ManifestRecord, load_manifest
-from datasets.sana_wm.reader import SANAReader, SampleReadError
+from datasets.sana_wm.reader import SANAReader, SampleReadError, _is_numeric_json_array
 from datasets.sana_wm.transforms import resize_crop_intrinsics
 
 
@@ -183,6 +183,28 @@ def test_camera_rejects_json_values_that_are_not_numbers(tmp_path, field, invali
     camera_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(SampleReadError, match=f"{field} must contain only JSON numbers"):
+        SANAReader(tmp_path)._read_camera(record)
+
+
+def test_camera_numeric_validation_handles_deep_nesting_without_recursion():
+    value = 0
+    for _ in range(2_000):
+        value = [value]
+
+    assert _is_numeric_json_array(value)
+
+
+def test_deep_camera_json_failure_is_wrapped_as_sample_error(tmp_path):
+    record = _record()
+    camera_path = tmp_path / record.camera_path
+    camera_path.parent.mkdir()
+    deeply_nested = "[" * 2_000 + "0" + "]" * 2_000
+    camera_path.write_text(
+        '{"c2w":' + deeply_nested + ',"intrinsics":[],"timestamps_seconds":[]}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SampleReadError, match="camera error"):
         SANAReader(tmp_path)._read_camera(record)
 
 

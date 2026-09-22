@@ -99,7 +99,7 @@ class SANAReader:
         path = self._path(record, "camera", record.camera_path)
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
             raise SampleReadError(record.sample_id, "camera", f"invalid JSON: {exc}") from exc
         if not isinstance(payload, dict):
             raise SampleReadError(record.sample_id, "camera", "root must be an object")
@@ -163,6 +163,11 @@ class SANAReader:
 def _is_numeric_json_array(value: object) -> bool:
     """Accept nested JSON arrays whose leaves are numbers, excluding booleans."""
 
-    if isinstance(value, list):
-        return all(_is_numeric_json_array(item) for item in value)
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, list):
+            pending.extend(item)
+        elif not isinstance(item, (int, float)) or isinstance(item, bool):
+            return False
+    return True
