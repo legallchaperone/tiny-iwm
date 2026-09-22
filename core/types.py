@@ -14,6 +14,9 @@ from core.camera import CameraCondition
 from core.video_layout import VideoLayout
 
 
+_CONTAINER_TAG = "__tiny_iwm_container__"
+
+
 class _FrozenDict(dict):
     """A JSON/pickle-friendly dictionary that rejects mutation after creation."""
 
@@ -37,14 +40,17 @@ def _freeze_value(value: Any) -> Any:
     """Snapshot common mutable containers without copying tensor-like leaves."""
 
     if isinstance(value, Mapping):
-        return _FrozenDict({key: _freeze_value(child) for key, child in value.items()})
+        frozen_items = tuple((key, _freeze_value(child)) for key, child in value.items())
+        if _CONTAINER_TAG in value:
+            return _FrozenDict({_CONTAINER_TAG: "mapping", "items": frozen_items})
+        return _FrozenDict(frozen_items)
     if isinstance(value, (list, tuple)):
         return tuple(_freeze_value(child) for child in value)
     if isinstance(value, (set, frozenset)):
         frozen = (_freeze_value(child) for child in value)
         return _FrozenDict(
             {
-                "__tiny_iwm_container__": "set",
+                _CONTAINER_TAG: "set",
                 "items": tuple(sorted(frozen, key=_canonical_sort_key)),
             }
         )

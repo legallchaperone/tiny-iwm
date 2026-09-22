@@ -150,6 +150,20 @@ def test_rollout_result_snapshots_and_freezes_identity_mappings():
     assert ordered.conditions != result.conditions
     assert json.dumps(ordered.conditions) != json.dumps(result.conditions)
 
+    marker_shaped_mapping = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={
+            "tags": {"__tiny_iwm_container__": "set", "items": [3, "a", "z"]},
+            "camera": {"angles": [1.0, 2.0]},
+        },
+        inference_settings={"steps": 8},
+    )
+    assert marker_shaped_mapping.conditions != result.conditions
+    assert json.dumps(marker_shaped_mapping.conditions) != json.dumps(result.conditions)
+
 
 def test_probe_event_carries_complete_run_and_position_identity():
     event = ProbeEvent(
