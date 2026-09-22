@@ -7,20 +7,20 @@ from torch import nn
 
 
 def sinusoidal_timestep_embedding(timestep: torch.Tensor, width: int) -> torch.Tensor:
-    if timestep.ndim != 1:
-        raise ValueError("timestep must have shape [B]")
+    if timestep.ndim not in (1, 2):
+        raise ValueError("timestep must have shape [B] or [B, N]")
     half = width // 2
     if half == 0:
-        return timestep[:, None]
+        return timestep[..., None]
     frequencies = torch.exp(
         -math.log(10_000.0)
         * torch.arange(half, device=timestep.device, dtype=torch.float32)
         / max(half - 1, 1)
     )
-    angles = timestep.to(torch.float32)[:, None] * frequencies[None]
+    angles = timestep.to(torch.float32)[..., None] * frequencies
     embedding = torch.cat((angles.cos(), angles.sin()), dim=-1)
     if width % 2:
-        embedding = torch.cat((embedding, torch.zeros_like(embedding[:, :1])), dim=-1)
+        embedding = torch.cat((embedding, torch.zeros_like(embedding[..., :1])), dim=-1)
     return embedding
 
 

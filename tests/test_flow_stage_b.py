@@ -44,6 +44,7 @@ def test_stage_b_replaces_only_target_with_noisy_fm_state() -> None:
     assert not built.loss_mask[:, :, :2].any()
     assert not built.loss_mask[:, :, 4:].any()
     assert built.metadata["target_latent_indices"] == (2, 3)
+    assert torch.equal(built.model_time, torch.tensor([[0, 0, 0.5, 0.5, 0, 0]]))
 
 
 def test_chunk_mask_is_bidirectional_inside_and_causal_between_chunks() -> None:

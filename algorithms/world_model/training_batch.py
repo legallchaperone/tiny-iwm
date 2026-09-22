@@ -117,10 +117,17 @@ class ChunkCausalVisibility:
 
     @classmethod
     def from_layout(cls, layout: VideoLayout) -> "ChunkCausalVisibility":
+        condition_boundary = layout.initial_condition_rgb.stop
+        condition_latents = 0
+        for rgb_range in layout.latent_to_rgb:
+            if rgb_range.start < condition_boundary < rgb_range.stop:
+                raise ValueError("initial condition boundary must align with a latent boundary")
+            if rgb_range.stop <= condition_boundary:
+                condition_latents += 1
         latent_chunk: dict[int, int] = {}
         for chunk_index, latent_range in enumerate(layout.chunk_to_latent):
             for latent_index in range(latent_range.start, latent_range.stop):
-                latent_chunk[latent_index] = chunk_index
+                latent_chunk[latent_index] = 0 if latent_index < condition_latents else chunk_index + 1
         token_chunks: list[int] = []
         for token_range in layout.token_to_latent_ranges:
             chunks = {
@@ -208,6 +215,16 @@ class StageBBatchBuilder:
             loss_mask, target_velocity(clean, noise), torch.zeros_like(clean)
         )
         visibility = ChunkCausalVisibility.from_layout(batch.layout)
+        model_time = torch.zeros(
+            (clean.shape[0], len(batch.layout.token_to_latent_ranges)),
+            device=clean.device, dtype=flow_time.dtype,
+        )
+        for token_index, latent_range in enumerate(batch.layout.token_to_latent_ranges):
+            selected = target_time[latent_range.start:latent_range.stop]
+            if selected.any() and not selected.all():
+                raise ValueError("target and clean condition cannot share a temporal patch")
+            if selected.all():
+                model_time[:, token_index] = flow_time
         return TrainingBatch(
             noisy_latents=model_input,
             clean_condition_latents=clean_branches,
@@ -216,6 +233,7 @@ class StageBBatchBuilder:
             loss_mask=loss_mask,
             attention_visibility=visibility,
             layout=batch.layout,
+            model_time=model_time,
             metadata={
                 "stage": "B",
                 "teacher_forcing": True,

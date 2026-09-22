@@ -1,11 +1,21 @@
 """Joint spatiotemporal self-attention shared by bidirectional and causal use."""
 
+from dataclasses import dataclass
+
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from .position import apply_3d_rope
 from .prope import TokenCameraProjection, apply_camera_projection
+
+
+@dataclass(frozen=True)
+class AttentionKV:
+    """Post-RoPE/PRoPE keys and values from committed clean history."""
+
+    key: torch.Tensor
+    value: torch.Tensor
 
 
 class JointSelfAttention(nn.Module):
@@ -33,14 +43,20 @@ class JointSelfAttention(nn.Module):
         coordinates: torch.Tensor,
         visibility_mask: torch.Tensor | None = None,
         camera_projection: TokenCameraProjection | None = None,
-    ) -> torch.Tensor:
+        kv_cache: AttentionKV | None = None,
+        return_kv_cache: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, AttentionKV]:
         batch, token_count, hidden = tokens.shape
-        qkv = self.qkv(tokens).view(batch, token_count, 3, self.num_heads, self.head_dim)
+        qkv = self.qkv(tokens).view(
+            batch, token_count, 3, self.num_heads, self.head_dim
+        )
         query, key, value = qkv.permute(2, 0, 3, 1, 4).unbind(dim=0)
         query, key = apply_3d_rope(query, key, coordinates)
         if camera_projection is not None:
             if self.prope_camera_dims is None:
-                raise ValueError("camera projection requires configured prope_camera_dims")
+                raise ValueError(
+                    "camera projection requires configured prope_camera_dims"
+                )
             query = apply_camera_projection(
                 query, camera_projection.transpose, camera_dims=self.prope_camera_dims
             )
@@ -50,6 +66,22 @@ class JointSelfAttention(nn.Module):
             value = apply_camera_projection(
                 value, camera_projection.inverse, camera_dims=self.prope_camera_dims
             )
+        if kv_cache is not None:
+            if (
+                kv_cache.key.shape[:2] != (batch, self.num_heads)
+                or kv_cache.key.shape[-1] != self.head_dim
+            ):
+                raise ValueError("KV cache does not match attention batch/head layout")
+            if kv_cache.key.shape != kv_cache.value.shape:
+                raise ValueError("cached keys and values must have identical shapes")
+            if kv_cache.key.device != key.device or kv_cache.key.dtype != key.dtype:
+                raise ValueError(
+                    "KV cache device and dtype must match the current tokens"
+                )
+            key = torch.cat((kv_cache.key, key), dim=2)
+            value = torch.cat((kv_cache.value, value), dim=2)
+        if kv_cache is not None and visibility_mask is not None:
+            raise ValueError("cached attention accepts only an unmasked clean prefix")
         mask = _attention_mask(visibility_mask, batch, token_count, tokens.device)
         attended = F.scaled_dot_product_attention(query, key, value, attn_mask=mask)
         if camera_projection is not None:
@@ -59,7 +91,10 @@ class JointSelfAttention(nn.Module):
                 camera_dims=self.prope_camera_dims,
             )
         attended = attended.transpose(1, 2).reshape(batch, token_count, hidden)
-        return self.output(attended)
+        output = self.output(attended)
+        if return_kv_cache:
+            return output, AttentionKV(key, value)
+        return output
 
 
 def _attention_mask(
