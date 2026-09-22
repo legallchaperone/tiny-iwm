@@ -27,6 +27,7 @@ class _FrozenDict(dict):
     popitem = _immutable
     setdefault = _immutable
     update = _immutable
+    __ior__ = _immutable
 
     def __reduce__(self):
         return type(self), (dict(self),)
@@ -40,8 +41,19 @@ def _freeze_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return tuple(_freeze_value(child) for child in value)
     if isinstance(value, (set, frozenset)):
-        return tuple(_freeze_value(child) for child in value)
+        frozen = (_freeze_value(child) for child in value)
+        return tuple(sorted(frozen, key=_canonical_sort_key))
     return value
+
+
+def _canonical_sort_key(value: Any) -> Tuple[str, str]:
+    """Order hashable set members consistently across Python processes."""
+
+    value_type = type(value)
+    type_name = f"{value_type.__module__}.{value_type.__qualname__}"
+    if isinstance(value, tuple):
+        return type_name, repr(tuple(_canonical_sort_key(child) for child in value))
+    return type_name, repr(value)
 
 
 @dataclass(frozen=True)

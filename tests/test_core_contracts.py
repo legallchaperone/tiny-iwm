@@ -96,7 +96,7 @@ def test_video_batch_rejects_misaligned_text():
 
 
 def test_rollout_result_snapshots_and_freezes_identity_mappings():
-    conditions = {"camera": {"angles": [1.0, 2.0]}}
+    conditions = {"camera": {"angles": [1.0, 2.0]}, "tags": {"z", "a", 3}}
     settings = {"steps": 8}
     result = RolloutResult(
         output_files=("sample.mp4",),
@@ -114,12 +114,27 @@ def test_rollout_result_snapshots_and_freezes_identity_mappings():
     assert result.inference_settings["steps"] == 8
     with pytest.raises(TypeError):
         result.conditions["camera"] = {}
+    alias = result.conditions
+    with pytest.raises(TypeError):
+        alias |= {"new": "value"}
+    assert "new" not in result.conditions
+    assert result.conditions["tags"] == (3, "a", "z")
 
     restored = pickle.loads(pickle.dumps(result))
     serialized = asdict(result)
     assert restored.conditions == result.conditions
     assert serialized["conditions"] == result.conditions
     assert json.loads(json.dumps(result.conditions))["camera"]["angles"] == [1.0, 2.0]
+
+    reordered = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={"tags": set([3, "z", "a"]), "camera": {"angles": [1.0, 2.0]}},
+        inference_settings={"steps": 8},
+    )
+    assert reordered.conditions == result.conditions
 
 
 def test_probe_event_carries_complete_run_and_position_identity():
