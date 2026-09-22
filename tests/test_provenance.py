@@ -111,12 +111,12 @@ def test_remote_credentials_are_removed_from_provenance(tmp_path):
         "remote",
         "add",
         "origin",
-        "https://user:top-secret@github.com/example/project.git?access_token=query-secret#fragment-secret",
+        "https://user:top-secret@github.com:notaport/example/project.git?access_token=query-secret#fragment-secret",
     )
 
     provenance = write_run_records(OmegaConf.create({"name": "safe"}), tmp_path / "run", project_root)
 
-    assert provenance["git"]["origin"] == "https://github.com/example/project.git"
+    assert provenance["git"]["origin"] == "https://github.com:notaport/example/project.git"
     persisted = (tmp_path / "run" / "provenance.json").read_text()
     assert "top-secret" not in persisted
     assert "query-secret" not in persisted

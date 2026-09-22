@@ -62,10 +62,11 @@ def _sanitize_remote_url(url: Optional[str]) -> Optional[str]:
     if not url or "://" not in url:
         return url
     parsed = urlsplit(url)
-    if parsed.hostname is None:
+    if not parsed.netloc:
         return url
-    host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
-    netloc = f"{host}:{parsed.port}" if parsed.port is not None else host
+    # Operate on the raw authority rather than ``parsed.port`` because Git can
+    # store nonnumeric port-like suffixes that urllib refuses to parse.
+    netloc = parsed.netloc.rsplit("@", 1)[-1]
     # Git remotes do not need URL queries or fragments for repository identity,
     # and either component may carry tokens. Persist neither one.
     return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
