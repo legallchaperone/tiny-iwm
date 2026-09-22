@@ -96,6 +96,10 @@ def validate_complete_sample(
         video[:, :, settings.future_start_rgb : settings.rgb_frame_count],
     ):
         raise ValueError("future perturbation did not change the input")
+    if layout.rgb_frame_count > settings.rgb_frame_count:
+        perturbed_video[:, :, settings.rgb_frame_count :] = perturbed_video[
+            :, :, settings.rgb_frame_count - 1 : settings.rgb_frame_count
+        ]
     perturbed_latents = codec.encode(perturbed_video)
     _validate_finite_tensor(perturbed_latents, "perturbed codec latents")
     if perturbed_latents.shape != latents.shape:
@@ -111,8 +115,12 @@ def validate_complete_sample(
             f"by {max_history_delta:.9g} (allowed {settings.causality_atol:.9g})"
         )
 
-    valid_video = video[:, :, : settings.rgb_frame_count].double()
-    valid_reconstruction = reconstruction[:, :, : settings.rgb_frame_count].double()
+    valid_video = video[:, :, : settings.rgb_frame_count].detach().to(
+        device="cpu", dtype=torch.float64
+    )
+    valid_reconstruction = reconstruction[
+        :, :, : settings.rgb_frame_count
+    ].detach().to(device="cpu", dtype=torch.float64)
     error = valid_reconstruction - valid_video
     mse = float(error.square().mean())
     mae = float(error.abs().mean())

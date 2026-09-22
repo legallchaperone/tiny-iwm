@@ -83,6 +83,17 @@ class ExtremeLatentCodec(CausalFixtureCodec):
         )
 
 
+class UniformPaddingLeakCodec(CausalFixtureCodec):
+    def encode(self, video: torch.Tensor) -> torch.Tensor:
+        batch, channels, _, height, width = video.shape
+        grouped = video.reshape(batch, channels, 241, 4, height, width).mean(dim=3)
+        padded_final_frame = video[:, :, -1:].mean(dim=(2, 3, 4), keepdim=True)
+        return grouped + padded_final_frame
+
+    def decode(self, normalized_latents: torch.Tensor) -> torch.Tensor:
+        return normalized_latents.repeat_interleave(4, dim=2)
+
+
 def _record(**changes) -> ManifestRecord:
     values = {
         "sample_id": "held-out-961",
@@ -179,6 +190,26 @@ def test_gate_rejects_nonfinite_statistics_derived_from_finite_extreme_latents()
             _sample(),
             codec=ExtremeLatentCodec(),
             layout=_layout(),
+            preprocessing={"color_space": "RGB"},
+        )
+
+
+def test_future_perturbation_regenerates_layout_padding_before_causality_check():
+    uniform_layout = VideoLayout.from_codec(
+        fps=16.0,
+        rgb_frame_count=961,
+        codec=CodecTemporalSpec(
+            temporal_compression=4,
+            first_frame_is_independent=False,
+        ),
+        latent_chunk_size=64,
+    )
+
+    with pytest.raises(ValueError, match="future RGB changed history latents"):
+        validate_complete_sample(
+            _sample(),
+            codec=UniformPaddingLeakCodec(),
+            layout=uniform_layout,
             preprocessing={"color_space": "RGB"},
         )
 
