@@ -112,7 +112,7 @@ class SANAReader:
             c2w = np.asarray(payload["c2w"], dtype=np.float64)
             intrinsics = np.asarray(payload["intrinsics"], dtype=np.float64)
             timestamps = np.asarray(payload["timestamps_seconds"], dtype=np.float64)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise SampleReadError(record.sample_id, "camera", f"non-numeric values: {exc}") from exc
         if c2w.ndim != 3 or c2w.shape[1:] != (4, 4):
             raise SampleReadError(record.sample_id, "camera", "c2w must have shape [T, 4, 4]")

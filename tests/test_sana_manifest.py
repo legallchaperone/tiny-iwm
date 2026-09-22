@@ -138,6 +138,26 @@ def test_singular_intrinsics_are_rejected(tmp_path):
         SANAReader(tmp_path)._read_camera(record)
 
 
+def test_numeric_camera_overflow_becomes_sample_failure(tmp_path):
+    record = _record()
+    camera_path = tmp_path / record.camera_path
+    camera_path.parent.mkdir()
+    huge = 10**400
+    camera_path.write_text(
+        json.dumps(
+            {
+                "c2w": [[[huge, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]],
+                "intrinsics": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]]],
+                "timestamps_seconds": [0],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SampleReadError, match="camera error: non-numeric values"):
+        SANAReader(tmp_path)._read_camera(record)
+
+
 def test_manifest_import_does_not_load_opencv_in_fresh_interpreter():
     import subprocess
     import sys
