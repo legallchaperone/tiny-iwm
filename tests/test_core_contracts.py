@@ -1,7 +1,7 @@
 import pytest
 
 from core.camera import CameraCondition, IntrinsicsSpace
-from core.types import LatentSpec, ProbeEvent, VideoBatch
+from core.types import LatentSpec, ProbeEvent, RolloutResult, VideoBatch
 from core.video_layout import FrameRange, VideoLayout
 
 
@@ -71,6 +71,45 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
     assert latent_spec.encoding_policy == "prefix_causal"
     assert camera.extrinsics_convention == "camera_to_world"
     assert batch.sample_ids == ("scene-1",)
+
+
+def test_video_batch_rejects_misaligned_text():
+    camera = CameraCondition(
+        c2w="[B,T,4,4]",
+        intrinsics="[B,T,3,3]",
+        timestamps_seconds="[B,T]",
+        intrinsics_space=IntrinsicsSpace.RGB_PIXELS,
+    )
+    with pytest.raises(ValueError, match="text must align"):
+        VideoBatch(
+            sample_ids=("a", "b"),
+            sources=("a.mp4", "b.mp4"),
+            layout=_layout(),
+            camera=camera,
+            video=object(),
+            text=("only one caption",),
+        )
+
+
+def test_rollout_result_snapshots_and_freezes_identity_mappings():
+    conditions = {"camera": {"angles": [1.0, 2.0]}}
+    settings = {"steps": 8}
+    result = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions=conditions,
+        inference_settings=settings,
+    )
+
+    conditions["camera"]["angles"].append(3.0)
+    settings["steps"] = 16
+
+    assert result.conditions["camera"]["angles"] == (1.0, 2.0)
+    assert result.inference_settings["steps"] == 8
+    with pytest.raises(TypeError):
+        result.conditions["camera"] = {}
 
 
 def test_probe_event_carries_complete_run_and_position_identity():
