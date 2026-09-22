@@ -10,6 +10,7 @@ from .blocks import DiTBlock, OBSERVATION_POINTS
 from .conditioning import TimestepConditioner
 from .latent_io import LatentPatchIO
 from .position import token_coordinates
+from .prope import TokenCameraProjection
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class JointVideoDiTConfig:
     patch_size: tuple[int, int, int]
     mlp_ratio: float = 4.0
     qkv_bias: bool = True
+    prope_camera_dims: int | None = None
 
     def __post_init__(self) -> None:
         if self.depth <= 0:
@@ -53,6 +55,7 @@ class JointVideoDiT(nn.Module):
                 config.num_heads,
                 mlp_ratio=config.mlp_ratio,
                 qkv_bias=config.qkv_bias,
+                prope_camera_dims=config.prope_camera_dims,
             )
             for _ in range(config.depth)
         )
@@ -87,6 +90,7 @@ class JointVideoDiT(nn.Module):
         visibility_mask: torch.Tensor | None = None,
         time_offset: int = 0,
         capture: Iterable[str] = (),
+        camera_projection: TokenCameraProjection | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if timestep.shape != (latents.shape[0],):
             raise ValueError("timestep must have shape [B]")
@@ -99,6 +103,8 @@ class JointVideoDiT(nn.Module):
         coordinates = token_coordinates(
             layout.grid_shape, time_offset=time_offset, device=tokens.device
         )
+        if camera_projection is not None and camera_projection.token_count != tokens.shape[1]:
+            raise ValueError("camera projection token count does not match patched latents")
         condition = self.timestep(timestep).to(dtype=tokens.dtype)
         observations: dict[str, torch.Tensor] = {}
         if "patch_tokens" in requested:
@@ -106,7 +112,7 @@ class JointVideoDiT(nn.Module):
 
         for index, block in enumerate(self.blocks):
             tokens, block_observations = block(
-                tokens, condition, coordinates, visibility_mask
+                tokens, condition, coordinates, visibility_mask, camera_projection
             )
             for point, value in block_observations.items():
                 name = f"blocks.{index}.{point}"
@@ -138,4 +144,3 @@ class JointVideoDiT(nn.Module):
         if requested:
             return velocity, observations
         return velocity
-

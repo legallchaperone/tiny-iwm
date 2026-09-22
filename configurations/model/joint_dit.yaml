@@ -8,4 +8,5 @@ num_heads: 16
 patch_size: [1, 2, 2]
 mlp_ratio: 4.0
 qkv_bias: true
+prope_camera_dims: 48
 attention: joint_spatiotemporal_softmax

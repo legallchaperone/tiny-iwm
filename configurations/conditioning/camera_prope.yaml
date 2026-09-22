@@ -1,8 +1,12 @@
 camera:
   enabled: true
   method: tiled_prope
-  pose_convention: null  # unresolved coordinate convention
-  translation_scale: null
+  pose_convention: camera_to_world
+  intrinsics_space: rgb_pixels
+  normalized_coordinates: centered_image
+  subframes_from: video_layout_token_ranges
+  head_layout: tiled_leading_slice
+  translation_scale: 1.0
 text:
   enabled: null          # unresolved scientific choice
   encoder: null
