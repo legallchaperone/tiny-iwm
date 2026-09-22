@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from hydra import compose, initialize_config_dir
+import pytest
+
+import main
 
 
 CONFIG_DIR = Path(__file__).parents[1] / "configurations"
@@ -43,3 +46,19 @@ def test_every_baseline_group_is_present():
         "conditioning", "dataset", "rollout", "evaluation", "probing", "runtime",
     }
     assert expected <= set(cfg.keys())
+
+
+def test_cloud_checkpoint_requires_wandb_entity():
+    with initialize_config_dir(config_dir=str(CONFIG_DIR), version_base=None):
+        cfg = compose(
+            config_name="config",
+            overrides=[
+                "+name=cloud-load-test",
+                "+load=abcdefgh",
+                "wandb.mode=disabled",
+                "wandb.entity=null",
+            ],
+        )
+
+    with pytest.raises(ValueError, match="cloud checkpoint loading"):
+        main.run.__wrapped__(cfg)

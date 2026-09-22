@@ -131,13 +131,6 @@ def run(cfg: DictConfig):
     if "name" not in cfg:
         raise ValueError("must specify a name for the run with command line argument '+name=[name]'")
 
-    if cfg.wandb.mode == "online" and not cfg.wandb.get("entity", None):
-        raise ValueError(
-            "must specify wandb entity in 'configurations/config.yaml' or with command line"
-            " argument 'wandb.entity=[entity]' \n An entity is your wandb user name or group"
-            " name. This is used for online logging. Use wandb.mode=disabled for local execution."
-        )
-
     if cfg.wandb.project is None:
         cfg.wandb.project = str(Path(__file__).parent.name)
 
@@ -157,6 +150,14 @@ def run(cfg: DictConfig):
         load_id = load
     else:
         load_id = None
+
+    if (cfg.wandb.mode == "online" or load_id) and not cfg.wandb.get("entity", None):
+        raise ValueError(
+            "must specify wandb entity in 'configurations/config.yaml' or with command line"
+            " argument 'wandb.entity=[entity]' \n An entity is your wandb user name or group"
+            " name. This is required for online logging and cloud checkpoint loading."
+            " Use wandb.mode=disabled for local execution without a cloud checkpoint."
+        )
 
     if load_id and "_on_compute_node" not in cfg:
         run_path = f"{cfg.wandb.entity}/{cfg.wandb.project}/{load_id}"
