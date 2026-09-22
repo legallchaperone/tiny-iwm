@@ -2,5 +2,8 @@ name: causal_tf
 attention_visibility: chunk_causal
 teacher_forcing: true
 initial_checkpoint: null # must point to this project's Stage A checkpoint
-chunk_duration_seconds: null
-latent_frames_per_chunk: null
+chunk_duration_seconds: 2.0
+latent_frames_per_chunk: 4
+target_selection: uniform_nonempty_chunk
+clean_history: teacher_forced
+future_clean_storage: present_but_causally_invisible
