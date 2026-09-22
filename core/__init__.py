@@ -2,10 +2,11 @@
 
 from core.camera import CameraCondition, IntrinsicsSpace
 from core.types import LatentSpec, ProbeEvent, RolloutResult, TrainingBatch, VideoBatch
-from core.video_layout import FrameRange, VideoLayout
+from core.video_layout import CodecTemporalSpec, FrameRange, VideoLayout
 
 __all__ = [
     "CameraCondition",
+    "CodecTemporalSpec",
     "FrameRange",
     "IntrinsicsSpace",
     "LatentSpec",
