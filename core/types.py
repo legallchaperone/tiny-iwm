@@ -40,7 +40,12 @@ def _freeze_value(value: Any) -> Any:
     """Snapshot common mutable containers without copying tensor-like leaves."""
 
     if isinstance(value, Mapping):
-        frozen_items = tuple((key, _freeze_value(child)) for key, child in value.items())
+        frozen_items = tuple(
+            sorted(
+                ((key, _freeze_value(child)) for key, child in value.items()),
+                key=lambda item: _canonical_sort_key(item[0]),
+            )
+        )
         if _CONTAINER_TAG in value:
             return _FrozenDict({_CONTAINER_TAG: "mapping", "items": frozen_items})
         return _FrozenDict(frozen_items)
