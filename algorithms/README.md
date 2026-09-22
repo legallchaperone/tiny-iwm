@@ -56,6 +56,18 @@ bidirectional temporal visibility. A condition boundary that cuts through one
 codec latent is rejected because it cannot represent clean and noisy semantics
 without ambiguity.
 
+## Stage B chunk-causal batches
+
+`StageBBatchBuilder` constructs one teacher-forced target chunk at a time.
+History and future chunks stay clean in the packed tensor, while the target
+chunk is replaced by its native Flow Matching noisy state and is the only
+loss-bearing region. The target's separate clean branch is zeroed.
+
+`ChunkCausalVisibility` makes attention bidirectional within each chunk and
+causal across chunks. The same mask is applied in every transformer block, so
+future clean values cannot reach an earlier target through intermediate tokens
+or layers. Temporal patches that cross a chunk boundary are rejected.
+
 Each algorithm class takes in a DictConfig file `cfg` in its `__init__`, which allows you to pass in arguments via configuration file in `configurations/algorithm` or [command line override](https://hydra.cc/docs/tutorials/basic/your_first_app/simple_cli/).
 
 ---
