@@ -8,22 +8,39 @@ layouts once at their boundary and must not rely on shape guessing downstream.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import Any, Mapping, Optional, Tuple
 
 from core.camera import CameraCondition
 from core.video_layout import VideoLayout
 
 
+class _FrozenDict(dict):
+    """A JSON/pickle-friendly dictionary that rejects mutation after creation."""
+
+    def _immutable(self, *_args: Any, **_kwargs: Any) -> None:
+        raise TypeError("frozen mapping does not support mutation")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+
+    def __reduce__(self):
+        return type(self), (dict(self),)
+
+
 def _freeze_value(value: Any) -> Any:
     """Snapshot common mutable containers without copying tensor-like leaves."""
 
     if isinstance(value, Mapping):
-        return MappingProxyType({key: _freeze_value(child) for key, child in value.items()})
+        return _FrozenDict({key: _freeze_value(child) for key, child in value.items()})
     if isinstance(value, (list, tuple)):
         return tuple(_freeze_value(child) for child in value)
     if isinstance(value, (set, frozenset)):
-        return frozenset(_freeze_value(child) for child in value)
+        return tuple(_freeze_value(child) for child in value)
     return value
 
 

@@ -1,3 +1,7 @@
+import json
+import pickle
+from dataclasses import asdict
+
 import pytest
 
 from core.camera import CameraCondition, IntrinsicsSpace
@@ -110,6 +114,12 @@ def test_rollout_result_snapshots_and_freezes_identity_mappings():
     assert result.inference_settings["steps"] == 8
     with pytest.raises(TypeError):
         result.conditions["camera"] = {}
+
+    restored = pickle.loads(pickle.dumps(result))
+    serialized = asdict(result)
+    assert restored.conditions == result.conditions
+    assert serialized["conditions"] == result.conditions
+    assert json.loads(json.dumps(result.conditions))["camera"]["angles"] == [1.0, 2.0]
 
 
 def test_probe_event_carries_complete_run_and_position_identity():
