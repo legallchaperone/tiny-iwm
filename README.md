@@ -1,6 +1,15 @@
-# Project Instructions
+# tiny-iwm
 
-[Write your project-specific instructions here]
+Research repository for studying how input representations affect internal DiT
+dynamics, long autoregressive video rollouts, and revisit consistency.
+
+The system design, baseline decisions, staged milestones, and acceptance criteria
+are recorded in [`design.md`](design.md). The repository is based on
+[`legallchaperone/research-template`](https://github.com/legallchaperone/research-template)
+at the pinned revision `e4a3f528d4aad7872adf6ad9cd94f80c06d91e48`.
+
+Development is tracked in the Linear project `tiny-iwm`. Implement one issue at
+a time and satisfy its acceptance criteria before completing dependent work.
 
 If you find this research template helpful to you, please cite us as
 
