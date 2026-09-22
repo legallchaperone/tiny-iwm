@@ -13,7 +13,6 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
-from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 from omegaconf import DictConfig, OmegaConf
@@ -61,15 +60,17 @@ def _sanitize_remote_url(url: Optional[str]) -> Optional[str]:
 
     if not url or "://" not in url:
         return url
-    parsed = urlsplit(url)
-    if not parsed.netloc:
-        return url
-    # Operate on the raw authority rather than ``parsed.port`` because Git can
-    # store nonnumeric port-like suffixes that urllib refuses to parse.
-    netloc = parsed.netloc.rsplit("@", 1)[-1]
+    # Treat Git's stored URL as opaque text. Git accepts authorities that strict
+    # URL parsers reject, including nonnumeric ports and unmatched IPv6 brackets.
+    scheme, remainder = url.split("://", 1)
+    authority, separator, tail = remainder.partition("/")
+    authority = authority.rsplit("@", 1)[-1]
+    authority = authority.split("?", 1)[0].split("#", 1)[0]
+    path = f"/{tail}" if separator else ""
+    path = path.split("?", 1)[0].split("#", 1)[0]
     # Git remotes do not need URL queries or fragments for repository identity,
     # and either component may carry tokens. Persist neither one.
-    return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+    return f"{scheme}://{authority}{path}"
 
 
 def _upstream_revisions(project_root: Path) -> Dict[str, str]:

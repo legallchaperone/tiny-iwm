@@ -123,6 +123,15 @@ def test_remote_credentials_are_removed_from_provenance(tmp_path):
     assert "fragment-secret" not in persisted
 
 
+def test_unparsable_remote_authority_is_sanitized_as_opaque_text():
+    remote = "https://user:secret@[example.com/repo.git?access_token=query-secret"
+
+    sanitized = provenance_module._sanitize_remote_url(remote)
+
+    assert sanitized == "https://[example.com/repo.git"
+    assert "secret" not in sanitized
+
+
 def test_temporary_record_is_removed_when_write_fails(tmp_path, monkeypatch):
     original_factory = provenance_module.tempfile.NamedTemporaryFile
     temporary_paths = []
