@@ -96,14 +96,26 @@ class RolloutResult:
 
 @dataclass(frozen=True)
 class ProbeEvent:
-    """One named observation with distinct rollout and flow-matching time."""
+    """One observation with complete run, time, token, and branch identity.
+
+    Seeds are mandatory fields but may be explicitly ``None`` when the forward
+    purpose does not have that seed class (for example, no generation seed during
+    training). ``physical_position`` names its coordinates, such as
+    ``{"time_seconds": ..., "y": ..., "x": ...}``, instead of relying on tuple
+    ordering.
+    """
 
     sample_id: str
+    training_seed: Optional[int]
+    generation_seed: Optional[int]
+    checkpoint_id: str
+    config_id: str
     layer: str
     observation_point: str
     rollout_time: int
     flow_time: float
     token_type: str
+    physical_position: Mapping[str, float]
     branch: str
     forward_purpose: str
     value: Optional[Any] = None

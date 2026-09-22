@@ -1,7 +1,7 @@
 import pytest
 
 from core.camera import CameraCondition, IntrinsicsSpace
-from core.types import LatentSpec, VideoBatch
+from core.types import LatentSpec, ProbeEvent, VideoBatch
 from core.video_layout import FrameRange, VideoLayout
 
 
@@ -71,3 +71,25 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
     assert latent_spec.encoding_policy == "prefix_causal"
     assert camera.extrinsics_convention == "camera_to_world"
     assert batch.sample_ids == ("scene-1",)
+
+
+def test_probe_event_carries_complete_run_and_position_identity():
+    event = ProbeEvent(
+        sample_id="scene-1",
+        training_seed=17,
+        generation_seed=23,
+        checkpoint_id="stage-a-step-1000",
+        config_id="sha256:config",
+        layer="blocks.3",
+        observation_point="post_attention",
+        rollout_time=8,
+        flow_time=0.5,
+        token_type="target",
+        physical_position={"time_seconds": 2.0, "y": 4.0, "x": 6.0},
+        branch="conditional",
+        forward_purpose="denoise",
+    )
+
+    assert event.checkpoint_id == "stage-a-step-1000"
+    assert event.generation_seed == 23
+    assert event.physical_position["time_seconds"] == 2.0
