@@ -41,6 +41,21 @@ Temporal sub-frames come from each `VideoLayout` token range, and the configured
 leading head slice is divided evenly among them; no four-frame or fixed-token
 upstream layout is assumed.
 
+## Flow Matching and Stage A
+
+`algorithms/world_model/flow.py` is the only mathematical convention used by
+training and sampling: `t=0` is clean, `t=1` is noise,
+`z_t=(1-t)z_clean+t*noise`, and target velocity is `noise-z_clean`. Sampling
+passes decreasing times to the same Euler step, from 1 toward 0. Time sampling
+and loss weighting are explicit in `configurations/algorithm/world_model.yaml`.
+
+`StageABatchBuilder` uses one sampled time per example, keeps every latent fully
+covered by `VideoLayout.initial_condition_rgb` clean, and excludes those known
+latents plus invalid latent locations from the loss. The target region uses
+bidirectional temporal visibility. A condition boundary that cuts through one
+codec latent is rejected because it cannot represent clean and noisy semantics
+without ambiguity.
+
 Each algorithm class takes in a DictConfig file `cfg` in its `__init__`, which allows you to pass in arguments via configuration file in `configurations/algorithm` or [command line override](https://hydra.cc/docs/tutorials/basic/your_first_app/simple_cli/).
 
 ---
