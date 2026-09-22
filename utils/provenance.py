@@ -66,7 +66,9 @@ def _sanitize_remote_url(url: Optional[str]) -> Optional[str]:
         return url
     host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
     netloc = f"{host}:{parsed.port}" if parsed.port is not None else host
-    return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+    # Git remotes do not need URL queries or fragments for repository identity,
+    # and either component may carry tokens. Persist neither one.
+    return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
 
 
 def _upstream_revisions(project_root: Path) -> Dict[str, str]:
