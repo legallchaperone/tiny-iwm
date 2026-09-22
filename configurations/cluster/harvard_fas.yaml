@@ -8,7 +8,7 @@ params:
   partition: null # e.g. kempner_h100
   account: null # e.g. kempner_sham_lab
   num_gpus: 4
-  ntasks_per_node: $(cluster.params.num_gpus)
+  ntasks_per_node: ${cluster.params.num_gpus}
   num_cpus: 48 # we automatically calculate cpus_per_task for you
   memory: 256G
 
@@ -22,8 +22,8 @@ launch_template: |
   #SBATCH --mail-type=FAIL
   #SBATCH --account={account}
   #SBATCH --partition={partition}
-  #SBATCH --nodes=${experiment.num_nodes}
-  #SBATCH --ntasks-per-node=${ntasks_per_node}
+  #SBATCH --nodes=${runtime.num_nodes}
+  #SBATCH --ntasks-per-node={ntasks_per_node}
   #SBATCH --gres=gpu:{num_gpus}
   #SBATCH --cpus-per-task={cpus_per_task}
   #SBATCH --mem={memory}

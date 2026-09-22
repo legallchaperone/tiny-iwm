@@ -9,6 +9,15 @@ metric:
   name: validation/accuracy
 
 parameters:
+  # Keep this template sweep on the template's example groups now that the
+  # repository default selects the world-model configuration.
+  experiment:
+    value: example_classification
+  dataset:
+    value: example_cifar10
+  algorithm:
+    value: example_classifier
+
   # Sweep params
   algorithm.lr:
     values: [1e-3, 1e-4]
