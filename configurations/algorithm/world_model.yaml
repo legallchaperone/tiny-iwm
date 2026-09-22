@@ -7,12 +7,16 @@ flow:
   loss_weighting: uniform
 optimizer:
   name: adamw
-  learning_rate: null  # unresolved scientific choice
-  weight_decay: null   # unresolved scientific choice
+  learning_rate: 0.0001
+  weight_decay: 0.01
+scheduler:
+  name: constant
+  interval: step
 training:
-  batch_size: null            # unresolved; depends on memory profiling
-  gradient_accumulation: null # unresolved; depends on global batch size
+  batch_size: 1
+  gradient_accumulation: 1
   max_steps: null             # unresolved training budget
 ema:
-  enabled: null
-  decay: null
+  enabled: true
+  decay: 0.9999
+  update_after_step: 0

@@ -32,3 +32,5 @@ load: null
 checkpoint:
   init_from: null
   resume_from: null
+  source_weights: model # model or ema for cross-stage initialization
+  ema_initialization: copy_loaded_model
