@@ -1,0 +1,165 @@
+{
+  "checkpoint_verification": {
+    "checkpoint_id": "sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1",
+    "epoch": 3,
+    "global_step": 50,
+    "resume_scope": [
+      "model",
+      "optimizer",
+      "scheduler",
+      "ema",
+      "global_step",
+      "epoch",
+      "rng_python",
+      "rng_torch_cpu",
+      "rng_torch_cuda"
+    ],
+    "schema_version": 1,
+    "sidecar_matches": true,
+    "status": "passed",
+    "verified_on": "cpu"
+  },
+  "config": {
+    "path": "configurations/runs/stage_a_baseline.yaml",
+    "sha256": "sha256:d0638837a5a86d5e622b2eecfbe65d998f8674ee275281253a6b7372d289e0ab"
+  },
+  "cost_control": {
+    "downloads_inside_gpu_function": false,
+    "prepared_data_volume": "tiny-iwm-stage-a"
+  },
+  "data": {
+    "manifest_sha256": "sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf",
+    "scene_disjoint": true,
+    "source_revision": "4d965e94b9ea11b9c5ba085251ffa7a0345e006f",
+    "train_sample_ids": [
+      "00100100001_0004650_0006450_s000000",
+      "00100100002_0001050_0002850_s000000",
+      "00100100003_0001050_0002850_s000000",
+      "00100200001_0002938_0004738_s000000",
+      "00100200002_0001050_0002850_s000000",
+      "00100200003_0001050_0002850_s000000",
+      "00100300001_0001050_0002850_s000000",
+      "00100300002_0001050_0002850_s000000",
+      "00100300003_0001050_0002850_s000000",
+      "00200100001_0001050_0002850_s000000",
+      "00200100002_0001050_0002850_s000000",
+      "00200100003_0001050_0002850_s000000",
+      "00200200001_0001050_0002850_s000000",
+      "00200200002_0001050_0002850_s000000",
+      "00200200003_0001050_0002850_s000000",
+      "00200300001_0001050_0002850_s000000"
+    ],
+    "validation_sample_ids": [
+      "00900100002_0001050_0002850_s000000",
+      "00900100003_0001050_0002850_s000000",
+      "00900200001_0001050_0002850_s000000",
+      "00900200002_0001050_0002850_s000000"
+    ]
+  },
+  "hardware": {
+    "cuda_runtime": "12.8",
+    "device": "NVIDIA A10",
+    "gpu_request": "A10G",
+    "platform": "Modal",
+    "python": "3.12.10",
+    "torch": "2.8.0+cu128",
+    "total_memory_bytes": 23684841472
+  },
+  "issue": "CWX-21",
+  "modal_run_url": "https://modal.com/apps/cwx-80046/main/ap-Crgo0e1Is2TroQjUUp6cXB",
+  "modal_verification_url": "https://modal.com/apps/cwx-80046/main/ap-6u7bA3nn58IPTBixAEnRC0",
+  "run_id": "stage-a-sekai-subset-seed21-v1",
+  "schema_version": 1,
+  "seed": 21,
+  "selected_checkpoint": {
+    "checkpoint_id": "sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1",
+    "ema_flow_matching_mse": 2.95703125,
+    "path": "/stage-a/checkpoints/stage-a-best.pt",
+    "resume_scope": [
+      "model",
+      "optimizer",
+      "scheduler",
+      "ema",
+      "global_step",
+      "epoch",
+      "rng_python",
+      "rng_torch_cpu",
+      "rng_torch_cuda"
+    ],
+    "step": 50
+  },
+  "status": "passed",
+  "training": {
+    "batch_size": 1,
+    "ema_decay": 0.9999,
+    "learning_rate": 0.0001,
+    "loss_trace": [
+      {
+        "loss": 3.015625,
+        "step": 1
+      },
+      {
+        "loss": 2.09375,
+        "step": 10
+      },
+      {
+        "loss": 1.828125,
+        "step": 20
+      },
+      {
+        "loss": 1.53125,
+        "step": 30
+      },
+      {
+        "loss": 1.5,
+        "step": 40
+      },
+      {
+        "loss": 1.671875,
+        "step": 50
+      },
+      {
+        "loss": 1.90625,
+        "step": 60
+      },
+      {
+        "loss": 1.4453125,
+        "step": 70
+      },
+      {
+        "loss": 1.4296875,
+        "step": 80
+      },
+      {
+        "loss": 1.6796875,
+        "step": 90
+      },
+      {
+        "loss": 1.6171875,
+        "step": 100
+      }
+    ],
+    "optimizer": "AdamW",
+    "precision": "bfloat16",
+    "scheduler": "constant",
+    "steps": 100,
+    "wall_seconds": 36.433254689,
+    "weight_decay": 0.01
+  },
+  "validation": {
+    "deterministic_noise_seed": 21000,
+    "flow_time": 0.5,
+    "measurements": [
+      {
+        "ema_flow_matching_mse": 2.95703125,
+        "step": 50
+      },
+      {
+        "ema_flow_matching_mse": 2.95703125,
+        "step": 100
+      }
+    ],
+    "selection": "lowest_validation_flow_matching_mse",
+    "weights": "ema"
+  }
+}
