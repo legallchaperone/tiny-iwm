@@ -122,12 +122,20 @@ class ChannelNormalizer:
         return cls(stats)
 
     def normalize(self, latents: torch.Tensor) -> torch.Tensor:
-        mean, std = self._parameters_for(latents)
-        return (latents - mean) / std
+        working = _safe_affine_precision(latents)
+        mean, std = self._parameters_for(working)
+        normalized = (working - mean) / std
+        if not torch.isfinite(normalized).all():
+            raise ValueError("normalization produced non-finite values")
+        return normalized
 
     def denormalize(self, latents: torch.Tensor) -> torch.Tensor:
-        mean, std = self._parameters_for(latents)
-        return latents * std + mean
+        working = _safe_affine_precision(latents)
+        mean, std = self._parameters_for(working)
+        denormalized = working * std + mean
+        if not torch.isfinite(denormalized).all():
+            raise ValueError("denormalization produced non-finite values")
+        return denormalized
 
     def _parameters_for(self, latents: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         _validate_latents(latents)
@@ -146,3 +154,10 @@ def _validate_latents(value: torch.Tensor) -> None:
         raise ValueError("latent batch and channel dimensions must be non-empty")
     if not torch.is_floating_point(value) or not torch.isfinite(value).all():
         raise ValueError("latents must contain finite floating-point values")
+
+
+def _safe_affine_precision(value: torch.Tensor) -> torch.Tensor:
+    _validate_latents(value)
+    if value.dtype in (torch.float16, torch.bfloat16):
+        return value.float()
+    return value

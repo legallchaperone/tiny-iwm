@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import torch
 from torch import nn
 
@@ -26,7 +28,7 @@ class SanaCausalVideoVAEAdapter(Representation):
     ) -> None:
         if normalizer.stats != spec.normalization:
             raise ValueError("normalizer statistics must match the codec specification")
-        self._model = model.eval()
+        self._model = deepcopy(model).eval()
         self._model.requires_grad_(False)
         self._spec = spec
         self._normalizer = ChannelNormalizer(spec.normalization)

@@ -75,6 +75,23 @@ def test_statistics_keep_small_variance_around_a_large_offset():
     assert normalizer.stats.std == (1.0,)
 
 
+def test_half_precision_normalization_promotes_to_avoid_overflow():
+    stats = NormalizationStats(
+        mean=(0.0,),
+        std=(1e-6,),
+        training_data_version="small-scale-v1",
+        sample_count=1,
+        value_count_per_channel=1,
+    )
+
+    normalized = ChannelNormalizer(stats).normalize(
+        torch.ones((1, 1, 1, 1, 1), dtype=torch.float16)
+    )
+
+    assert normalized.dtype == torch.float32
+    assert torch.isfinite(normalized).all()
+
+
 def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
     normalizer = _normalizer()
     codec = _codec(normalizer)
@@ -178,8 +195,8 @@ def test_sana_adapter_freezes_codec_and_round_trips_through_normalization():
     model.train()
     decoded = adapter.decode(normalized)
 
-    assert not model.training
-    assert all(not parameter.requires_grad for parameter in model.parameters())
+    assert not adapter._model.training
+    assert all(not parameter.requires_grad for parameter in adapter._model.parameters())
     assert not normalized.requires_grad
     torch.testing.assert_close(decoded, video)
     assert adapter.spec.as_latent_spec().codec_id.endswith("a" * 64)
@@ -194,6 +211,21 @@ def test_sana_adapter_snapshots_injected_normalizer():
     expected = torch.tensor([-1.0, -1.0, 1.0, 1.0]).view_as(video)
 
     normalizer._stats = replace(normalizer.stats, mean=(999.0, 999.0))
+
+    torch.testing.assert_close(adapter.encode(video), expected)
+
+
+def test_sana_adapter_snapshots_injected_codec_state():
+    normalizer = _normalizer()
+    model = _OfficialCodecStub()
+    adapter = SanaCausalVideoVAEAdapter(
+        model, spec=_codec(normalizer), normalizer=normalizer
+    )
+    video = torch.tensor([0.5, 1.0, 1.5, 3.0]).view(2, 2, 1, 1, 1)
+    expected = torch.tensor([-1.0, -1.0, 1.0, 1.0]).view_as(video)
+
+    with torch.no_grad():
+        model.scale.fill_(10.0)
 
     torch.testing.assert_close(adapter.encode(video), expected)
 
