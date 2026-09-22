@@ -1,0 +1,113 @@
+schema_version: 1
+
+# This registry records references only. No upstream implementation is vendored by
+# this file. Add a target entry before copying or adapting code from a source.
+sources:
+  research-template:
+    repository: https://github.com/legallchaperone/research-template
+    commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
+    license:
+      path: LICENSE
+      url: https://github.com/legallchaperone/research-template/blob/e4a3f528d4aad7872adf6ad9cd94f80c06d91e48/LICENSE
+      status: verified
+    reuse_kind: adapted
+    intended_local_targets:
+      - main.py
+      - experiments/
+      - algorithms/common/
+      - configurations/
+    adaptation_notes: >-
+      Preserve the Hydra entry point, Experiment dispatch, and Lightning skeleton.
+      Extend them with project-specific tasks, local provenance, collate and strategy
+      configuration, and explicit initialization versus resume semantics. Preserve
+      the required README and LICENSE attribution.
+
+  wan-2.1:
+    repository: https://github.com/Wan-Video/Wan2.1
+    commit: 9737cba9c1c3c4d04b33fcad41c111989865d315
+    license:
+      path: LICENSE.txt
+      url: https://github.com/Wan-Video/Wan2.1/blob/9737cba9c1c3c4d04b33fcad41c111989865d315/LICENSE.txt
+      status: verified
+    reuse_kind: adapted
+    intended_local_targets:
+      - models/dit.py
+      - models/blocks.py
+      - models/position.py
+      - models/latent_io.py
+    adaptation_notes: >-
+      Reimplement the standard block, modulation, MLP, patching, and position
+      components behind configurable dimensions. Initialize the DiT randomly and
+      exclude implicit pretrained model loading and fixed upstream shapes.
+
+  causal-forcing:
+    repository: https://github.com/thu-ml/Causal-Forcing
+    commit: 31a43313af7c805af10e4e2bcbad1fa036e0ced9
+    license:
+      path: LICENSE
+      url: https://github.com/thu-ml/Causal-Forcing/blob/31a43313af7c805af10e4e2bcbad1fa036e0ced9/LICENSE
+      status: verified
+    reuse_kind: adapted
+    intended_local_targets:
+      - training/training_batch.py
+      - models/attention.py
+      - training/flow.py
+      - training/algorithm.py
+      - inference/rollout.py
+      - inference/history.py
+    adaptation_notes: >-
+      Use the clean/noisy visibility pattern, supervised flow organization, and
+      clean-history cache semantics as references. Remove fixed token, layer, and
+      sequence assumptions. Do not copy the trainer, distributed lifecycle,
+      Diffusion Forcing timestep mixture, context corruption, or distillation path.
+
+  sana:
+    repository: https://github.com/NVlabs/Sana
+    commit: f9178744c096dcf2a2ea773da183e341bcbeb044
+    license:
+      path: LICENSE
+      url: https://github.com/NVlabs/Sana/blob/f9178744c096dcf2a2ea773da183e341bcbeb044/LICENSE
+      status: verified
+    reuse_kind: mixed
+    intended_local_targets:
+      - datasets/sana_wm/reader.py
+      - core/camera.py
+      - controls/camera_controller.py
+      - representations/video_vae.py
+      - third_party/sana_wm_metrics/
+      - evaluation/aggregate.py
+    adaptation_notes: >-
+      Adapt data, camera, controller, and codec interfaces with strict failure
+      handling and explicit geometry. Official metric code may be vendored with its
+      copyright and license preserved; keep format adaptation outside the metric
+      implementation. Do not import SANA's trainer or environment-specific fallbacks.
+
+  matrix-game-3.5:
+    repository: https://github.com/Riemann-Dynamics/Matrix-Game-3.5
+    commit: fbf7def0693ae14f745ba35bf2a26215d4ef991d
+    license:
+      path: LICENSE
+      url: https://github.com/Riemann-Dynamics/Matrix-Game-3.5/blob/fbf7def0693ae14f745ba35bf2a26215d4ef991d/LICENSE
+      status: verified
+    reuse_kind: adapted
+    intended_local_targets:
+      - models/prope.py
+    adaptation_notes: >-
+      Adapt tiled PRoPE and the paired Q, K, V, and attention-output transforms to
+      this project's dynamic VideoLayout, masks, and cache. Exclude Patch Memory,
+      fixed four-sub-frame assumptions, and unrelated position experiments.
+
+  prope:
+    repository: https://github.com/liruilong940607/prope
+    commit: 4c11297761225d25258e5ec21c61e9b19ab61e38
+    license:
+      path: null
+      url: null
+      status: missing-at-pinned-revision
+    reuse_kind: reference-only
+    intended_local_targets:
+      - models/prope.py
+    adaptation_notes: >-
+      Use the implementation only to cross-check the published geometry. The pinned
+      repository has no root license file, so do not copy or adapt its source unless
+      licensing is clarified and this registry is updated.
