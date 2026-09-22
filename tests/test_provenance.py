@@ -172,3 +172,27 @@ def test_temporary_record_is_removed_when_write_fails(tmp_path, monkeypatch):
 
     assert temporary_paths
     assert all(not path.exists() for path in temporary_paths)
+
+
+def test_interrupt_rolls_back_partially_published_record_set(tmp_path, monkeypatch):
+    original_link = provenance_module.os.link
+    link_calls = 0
+
+    def interrupting_link(source, destination):
+        nonlocal link_calls
+        link_calls += 1
+        if link_calls == 2:
+            raise KeyboardInterrupt
+        return original_link(source, destination)
+
+    monkeypatch.setattr(provenance_module.os, "link", interrupting_link)
+    destinations = {
+        tmp_path / "resolved_config.yaml": "name: interrupted\n",
+        tmp_path / "provenance.json": "{}\n",
+    }
+
+    with pytest.raises(KeyboardInterrupt):
+        provenance_module._atomic_create_files(destinations)
+
+    assert all(not path.exists() for path in destinations)
+    assert not list(tmp_path.glob(".*.tmp"))

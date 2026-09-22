@@ -164,7 +164,7 @@ def _atomic_create_files(contents: Mapping[Path, str]) -> None:
         for path, temporary in temporary_files.items():
             os.link(temporary, path)
             created.append(path)
-    except Exception:
+    except BaseException:
         for path in created:
             path.unlink(missing_ok=True)
         raise
