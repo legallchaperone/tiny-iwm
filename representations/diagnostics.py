@@ -111,10 +111,13 @@ def validate_complete_sample(
             f"by {max_history_delta:.9g} (allowed {settings.causality_atol:.9g})"
         )
 
-    valid_video = video[:, :, : settings.rgb_frame_count].float()
-    valid_reconstruction = reconstruction[:, :, : settings.rgb_frame_count].float()
+    valid_video = video[:, :, : settings.rgb_frame_count].double()
+    valid_reconstruction = reconstruction[:, :, : settings.rgb_frame_count].double()
     error = valid_reconstruction - valid_video
     mse = float(error.square().mean())
+    mae = float(error.abs().mean())
+    if not isfinite(mse) or not isfinite(mae):
+        raise ValueError("reconstruction metrics must be finite")
     cache_identity = CacheIdentity(
         data_version=sample.record.data_version,
         sample_id=sample.record.sample_id,
@@ -191,7 +194,7 @@ def validate_complete_sample(
         },
         "reconstruction": {
             "mse": mse,
-            "mae": float(error.abs().mean()),
+            "mae": mae,
             "psnr_db": None if mse == 0 else 10.0 * log10(1.0 / mse),
             "minimum": float(valid_reconstruction.min()),
             "maximum": float(valid_reconstruction.max()),
@@ -269,12 +272,16 @@ def _video_tensor(frames: np.ndarray, codec: Representation) -> torch.Tensor:
 
 
 def _latent_statistics(latents: torch.Tensor) -> dict[str, object]:
-    values = latents.detach().float().cpu()
+    values = latents.detach().to(device="cpu", dtype=torch.float64)
     reduce_dims = (0, 2, 3, 4)
+    means = values.mean(dim=reduce_dims)
+    stds = values.std(dim=reduce_dims, unbiased=False)
+    if not torch.isfinite(means).all() or not torch.isfinite(stds).all():
+        raise ValueError("derived latent statistics must be finite")
     return {
         "shape_bcthw": list(values.shape),
-        "mean_per_channel": values.mean(dim=reduce_dims).tolist(),
-        "std_per_channel": values.std(dim=reduce_dims, unbiased=False).tolist(),
+        "mean_per_channel": means.tolist(),
+        "std_per_channel": stds.tolist(),
         "minimum": float(values.min()),
         "maximum": float(values.max()),
     }

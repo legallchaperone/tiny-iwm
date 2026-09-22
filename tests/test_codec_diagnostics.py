@@ -68,6 +68,21 @@ class CausalFixtureCodec(Representation):
         )
 
 
+class ExtremeLatentCodec(CausalFixtureCodec):
+    def encode(self, video: torch.Tensor) -> torch.Tensor:
+        latents = super().encode(video).double()
+        latents[:, :, 0, 0, 0] = torch.finfo(torch.float64).max
+        return latents
+
+    def decode(self, normalized_latents: torch.Tensor) -> torch.Tensor:
+        batch, _, _, height, width = normalized_latents.shape
+        return torch.zeros(
+            (batch, 3, 961, height, width),
+            dtype=torch.float64,
+            device=normalized_latents.device,
+        )
+
+
 def _record(**changes) -> ManifestRecord:
     values = {
         "sample_id": "held-out-961",
@@ -153,6 +168,16 @@ def test_gate_rejects_latents_incompatible_with_codec_identity(bad_shape, messag
         validate_complete_sample(
             _sample(),
             codec=CausalFixtureCodec(bad_shape=bad_shape),
+            layout=_layout(),
+            preprocessing={"color_space": "RGB"},
+        )
+
+
+def test_gate_rejects_nonfinite_statistics_derived_from_finite_extreme_latents():
+    with pytest.raises(ValueError, match="derived latent statistics must be finite"):
+        validate_complete_sample(
+            _sample(),
+            codec=ExtremeLatentCodec(),
             layout=_layout(),
             preprocessing={"color_space": "RGB"},
         )
