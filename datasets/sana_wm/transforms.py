@@ -36,10 +36,10 @@ def resize_crop_intrinsics(
     result = matrices.copy()
     scale_x = resized_w / input_w
     scale_y = resized_h / input_h
-    result[:, 0, 0] *= scale_x
-    result[:, 1, 1] *= scale_y
-    result[:, 0, 2] = result[:, 0, 2] * scale_x - left
-    result[:, 1, 2] = result[:, 1, 2] * scale_y - top
+    result[:, 0, :] *= scale_x
+    result[:, 1, :] *= scale_y
+    result[:, 0, 2] -= left
+    result[:, 1, 2] -= top
     return result
 
 

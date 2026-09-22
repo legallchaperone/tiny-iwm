@@ -120,6 +120,8 @@ class SANAReader:
             raise SampleReadError(record.sample_id, "camera", "camera focal lengths must be positive")
         if not np.allclose(intrinsics[:, 2], np.array([0.0, 0.0, 1.0])):
             raise SampleReadError(record.sample_id, "camera", "intrinsics has invalid homogeneous row")
+        if np.any(np.abs(np.linalg.det(intrinsics)) <= 1e-12):
+            raise SampleReadError(record.sample_id, "camera", "intrinsics must be nonsingular")
         if np.any(np.diff(timestamps) <= 0):
             raise SampleReadError(record.sample_id, "camera", "timestamps must increase strictly")
         return CameraData(c2w, intrinsics, timestamps)

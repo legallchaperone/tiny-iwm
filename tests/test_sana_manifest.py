@@ -39,7 +39,7 @@ def test_source_scene_cannot_cross_train_validation_split():
 
 
 def test_resize_crop_updates_focal_length_and_principal_point():
-    intrinsics = np.array([[[100.0, 0.0, 50.0], [0.0, 80.0, 40.0], [0.0, 0.0, 1.0]]])
+    intrinsics = np.array([[[100.0, 4.0, 50.0], [2.0, 80.0, 40.0], [0.0, 0.0, 1.0]]])
 
     transformed = resize_crop_intrinsics(
         intrinsics,
@@ -51,9 +51,9 @@ def test_resize_crop_updates_focal_length_and_principal_point():
 
     np.testing.assert_allclose(
         transformed[0],
-        [[150.0, 0.0, 45.0], [0.0, 160.0, 60.0], [0.0, 0.0, 1.0]],
+        [[150.0, 6.0, 45.0], [4.0, 160.0, 60.0], [0.0, 0.0, 1.0]],
     )
-    np.testing.assert_array_equal(intrinsics[0], [[100, 0, 50], [0, 80, 40], [0, 0, 1]])
+    np.testing.assert_array_equal(intrinsics[0], [[100, 4, 50], [2, 80, 40], [0, 0, 1]])
 
 
 def test_missing_camera_is_an_explicit_sample_failure(tmp_path):
@@ -104,6 +104,25 @@ def test_singular_camera_transform_is_rejected(tmp_path):
     )
 
     with pytest.raises(SampleReadError, match="rotation must be orthonormal"):
+        SANAReader(tmp_path)._read_camera(record)
+
+
+def test_singular_intrinsics_are_rejected(tmp_path):
+    record = _record()
+    camera_path = tmp_path / record.camera_path
+    camera_path.parent.mkdir()
+    camera_path.write_text(
+        json.dumps(
+            {
+                "c2w": [np.eye(4).tolist()],
+                "intrinsics": [[[1, 1, 50], [1, 1, 50], [0, 0, 1]]],
+                "timestamps_seconds": [0],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SampleReadError, match="intrinsics must be nonsingular"):
         SANAReader(tmp_path)._read_camera(record)
 
 
