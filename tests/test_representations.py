@@ -344,15 +344,32 @@ def test_sana_adapter_disables_ambient_autocast_for_codec_calls():
 
 def test_cuda_float32_math_mode_pins_and_restores_tf32_policy():
     original_cudnn = torch.backends.cudnn.allow_tf32
-    original_matmul = torch.backends.cuda.matmul.allow_tf32
+    original_matmul = {
+        "allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+        "allow_fp16_reduced_precision_reduction": (
+            torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
+        ),
+        "allow_bf16_reduced_precision_reduction": (
+            torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
+        ),
+        "allow_fp16_accumulation": torch.backends.cuda.matmul.allow_fp16_accumulation,
+    }
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
     try:
         with _codec_math_mode("cuda", torch.float32):
             assert not torch.backends.cudnn.allow_tf32
             assert not torch.backends.cuda.matmul.allow_tf32
+            assert not torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
+            assert not torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
+            assert not torch.backends.cuda.matmul.allow_fp16_accumulation
         assert torch.backends.cudnn.allow_tf32
         assert torch.backends.cuda.matmul.allow_tf32
+        assert torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
+        assert torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
     finally:
         torch.backends.cudnn.allow_tf32 = original_cudnn
-        torch.backends.cuda.matmul.allow_tf32 = original_matmul
+        for policy, enabled in original_matmul.items():
+            setattr(torch.backends.cuda.matmul, policy, enabled)

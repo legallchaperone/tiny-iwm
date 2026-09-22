@@ -104,16 +104,29 @@ def _codec_math_mode(
     """Run with declared precision, isolated from ambient autocast and TF32."""
 
     with torch.autocast(device_type=device_type, enabled=False):
-        if device_type != "cuda" or dtype != torch.float32:
+        if device_type != "cuda":
             yield
             return
         with _TF32_POLICY_LOCK:
             cudnn_tf32 = torch.backends.cudnn.allow_tf32
-            matmul_tf32 = torch.backends.cuda.matmul.allow_tf32
+            matmul_policies = {
+                "allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+                "allow_fp16_reduced_precision_reduction": (
+                    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
+                ),
+                "allow_bf16_reduced_precision_reduction": (
+                    torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
+                ),
+                "allow_fp16_accumulation": (
+                    torch.backends.cuda.matmul.allow_fp16_accumulation
+                ),
+            }
             try:
                 torch.backends.cudnn.allow_tf32 = False
-                torch.backends.cuda.matmul.allow_tf32 = False
+                for policy in matmul_policies:
+                    setattr(torch.backends.cuda.matmul, policy, False)
                 yield
             finally:
                 torch.backends.cudnn.allow_tf32 = cudnn_tf32
-                torch.backends.cuda.matmul.allow_tf32 = matmul_tf32
+                for policy, enabled in matmul_policies.items():
+                    setattr(torch.backends.cuda.matmul, policy, enabled)
