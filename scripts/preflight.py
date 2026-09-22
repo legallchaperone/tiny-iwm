@@ -41,6 +41,7 @@ def validate_preflight_config(cfg: DictConfig) -> None:
         name: value
         for name, value in {
             "checkpoint.init_from": checkpoint.get("init_from"),
+            "stage.initial_checkpoint": cfg.stage.get("initial_checkpoint"),
             "load": cfg.get("load"),
         }.items()
         if value

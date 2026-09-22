@@ -97,3 +97,21 @@ def test_preflight_rejects_duplicate_legacy_and_explicit_selectors(
 
     with pytest.raises(ValueError, match=message):
         validate_preflight_config(cfg)
+
+
+def test_preflight_rejects_stage_initial_checkpoint_with_resume():
+    cfg = _baseline_config()
+    cfg.stage.initial_checkpoint = "stage-a.ckpt"
+    cfg.checkpoint.resume_from = "interrupted.ckpt"
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        validate_preflight_config(cfg)
+
+
+def test_preflight_rejects_duplicate_stage_and_checkpoint_initialization():
+    cfg = _baseline_config()
+    cfg.stage.initial_checkpoint = "stage-a.ckpt"
+    cfg.checkpoint.init_from = "same-stage-a.ckpt"
+
+    with pytest.raises(ValueError, match="multiple initialization selectors"):
+        validate_preflight_config(cfg)
