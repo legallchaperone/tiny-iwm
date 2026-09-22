@@ -85,7 +85,7 @@ class SANAReader:
         path = self._path(record, "camera", record.camera_path)
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise SampleReadError(record.sample_id, "camera", f"invalid JSON: {exc}") from exc
         if not isinstance(payload, dict):
             raise SampleReadError(record.sample_id, "camera", "root must be an object")
@@ -110,6 +110,16 @@ class SANAReader:
             raise SampleReadError(record.sample_id, "camera", "values must be finite")
         if not np.allclose(c2w[:, 3], np.array([0.0, 0.0, 0.0, 1.0])):
             raise SampleReadError(record.sample_id, "camera", "c2w has invalid homogeneous row")
+        rotations = c2w[:, :3, :3]
+        identity = np.broadcast_to(np.eye(3), rotations.shape)
+        if not np.allclose(rotations @ np.swapaxes(rotations, 1, 2), identity, atol=1e-5):
+            raise SampleReadError(record.sample_id, "camera", "c2w rotation must be orthonormal")
+        if not np.allclose(np.linalg.det(rotations), 1.0, atol=1e-5):
+            raise SampleReadError(record.sample_id, "camera", "c2w rotation must have determinant +1")
+        if np.any(intrinsics[:, 0, 0] <= 0) or np.any(intrinsics[:, 1, 1] <= 0):
+            raise SampleReadError(record.sample_id, "camera", "camera focal lengths must be positive")
+        if not np.allclose(intrinsics[:, 2], np.array([0.0, 0.0, 1.0])):
+            raise SampleReadError(record.sample_id, "camera", "intrinsics has invalid homogeneous row")
         if np.any(np.diff(timestamps) <= 0):
             raise SampleReadError(record.sample_id, "camera", "timestamps must increase strictly")
         return CameraData(c2w, intrinsics, timestamps)
@@ -118,7 +128,7 @@ class SANAReader:
         path = self._path(record, "metadata", record.metadata_path)
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise SampleReadError(record.sample_id, "metadata", f"invalid JSON: {exc}") from exc
         if not isinstance(payload, dict):
             raise SampleReadError(record.sample_id, "metadata", "root must be an object")

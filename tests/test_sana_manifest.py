@@ -76,3 +76,50 @@ def test_malformed_camera_is_an_explicit_sample_failure(tmp_path):
 
     with pytest.raises(SampleReadError, match="missing fields"):
         SANAReader(tmp_path)._read_camera(record)
+
+
+def test_non_utf8_camera_is_an_explicit_sample_failure(tmp_path):
+    record = _record()
+    camera_path = tmp_path / record.camera_path
+    camera_path.parent.mkdir()
+    camera_path.write_bytes(b"\xff\xfe")
+
+    with pytest.raises(SampleReadError, match="invalid JSON"):
+        SANAReader(tmp_path)._read_camera(record)
+
+
+def test_singular_camera_transform_is_rejected(tmp_path):
+    record = _record()
+    camera_path = tmp_path / record.camera_path
+    camera_path.parent.mkdir()
+    camera_path.write_text(
+        json.dumps(
+            {
+                "c2w": [[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1]]],
+                "intrinsics": [[[100, 0, 50], [0, 100, 50], [0, 0, 1]]],
+                "timestamps_seconds": [0],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SampleReadError, match="rotation must be orthonormal"):
+        SANAReader(tmp_path)._read_camera(record)
+
+
+def test_manifest_import_does_not_load_opencv_in_fresh_interpreter():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import datasets.sana_wm.manifest; "
+            "assert 'cv2' not in sys.modules",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr

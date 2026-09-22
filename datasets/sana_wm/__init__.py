@@ -1,7 +1,10 @@
-"""SANA-WM data contracts and strict local reader."""
+"""SANA-WM data contracts and strict local reader.
+
+Reader symbols are loaded lazily so manifest-only tooling does not import
+OpenCV on headless hosts.
+"""
 
 from datasets.sana_wm.manifest import Manifest, ManifestRecord, load_manifest
-from datasets.sana_wm.reader import CameraData, SANAReader, SANASample
 
 __all__ = [
     "CameraData",
@@ -11,3 +14,11 @@ __all__ = [
     "SANASample",
     "load_manifest",
 ]
+
+
+def __getattr__(name: str):
+    if name in {"CameraData", "SANAReader", "SANASample"}:
+        from datasets.sana_wm import reader
+
+        return getattr(reader, name)
+    raise AttributeError(name)
