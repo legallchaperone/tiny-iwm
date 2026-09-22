@@ -1,0 +1,72 @@
+{
+  "checks": {
+    "all_gradients_finite": true,
+    "all_outputs_finite": true,
+    "camera_condition_changes_output": true,
+    "condition_excluded_from_loss": true,
+    "condition_latent_stays_clean": true,
+    "fm_t0_is_clean": true,
+    "fm_t1_is_noise": true,
+    "gradients_present": true,
+    "loss_finite": true,
+    "nonzero_gradient": true,
+    "output_shape_matches_nondivisible_input": true,
+    "probe_is_forward_invariant": true,
+    "probe_names_exact": true,
+    "probe_retains_gradients": true,
+    "solver_one_to_zero_reaches_clean": true
+  },
+  "environment": {
+    "device": "cpu",
+    "dtype": "float32",
+    "python": "3.12.13",
+    "torch": "2.14.0"
+  },
+  "failures": [],
+  "flow": {
+    "condition_latent_indices": [
+      0
+    ],
+    "convention": "t0_clean_t1_noise",
+    "loss": 3.9352705478668213,
+    "times": [
+      0.25,
+      0.75
+    ]
+  },
+  "gate": "CWX-18 M2 debug-size correctness",
+  "layout": {
+    "camera_subframes": 1,
+    "latent_frames": 3,
+    "latent_shape": [
+      2,
+      4,
+      3,
+      5,
+      7
+    ],
+    "rgb_frames": 5,
+    "token_count": 36,
+    "token_grid_shape": [
+      3,
+      3,
+      4
+    ]
+  },
+  "model": {
+    "depth": 2,
+    "hidden_size": 32,
+    "latent_channels": 4,
+    "num_heads": 4,
+    "parameter_count": 41968,
+    "patch_size": [
+      1,
+      2,
+      2
+    ],
+    "prope_camera_dims": 8
+  },
+  "schema_version": 1,
+  "seed": 18,
+  "status": "passed"
+}
