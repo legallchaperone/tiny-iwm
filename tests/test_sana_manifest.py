@@ -191,7 +191,21 @@ def test_path_resolution_failure_becomes_sample_failure(tmp_path, monkeypatch):
         raise RuntimeError("symlink loop")
 
     monkeypatch.setattr(Path, "resolve", fail_resolve)
-    with pytest.raises(SampleReadError, match="camera error: cannot resolve path"):
+    with pytest.raises(SampleReadError, match="camera error: cannot access path"):
+        reader._path(record, "camera", record.camera_path)
+
+
+def test_file_status_failure_becomes_sample_failure(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    reader = SANAReader(tmp_path)
+    record = _record()
+
+    def fail_is_file(_path):
+        raise OSError("network filesystem unavailable")
+
+    monkeypatch.setattr(Path, "is_file", fail_is_file)
+    with pytest.raises(SampleReadError, match="camera error: cannot access path"):
         reader._path(record, "camera", record.camera_path)
 
 

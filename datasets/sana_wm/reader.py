@@ -60,13 +60,14 @@ class SANAReader:
     def _path(self, record: ManifestRecord, component: str, relative: str) -> Path:
         try:
             path = (self.data_root / relative).resolve()
+            is_file = path.is_file()
         except (OSError, RuntimeError) as exc:
             raise SampleReadError(
-                record.sample_id, component, f"cannot resolve path {relative!r}: {exc}"
+                record.sample_id, component, f"cannot access path {relative!r}: {exc}"
             ) from exc
         if self.data_root not in path.parents:
             raise SampleReadError(record.sample_id, component, "path escapes data_root")
-        if not path.is_file():
+        if not is_file:
             raise SampleReadError(record.sample_id, component, f"missing file: {relative}")
         return path
 
