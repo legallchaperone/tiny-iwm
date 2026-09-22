@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 from omegaconf import OmegaConf
+import pytest
 
 from scripts.write_run_records import compose_and_write
 from utils.provenance import write_run_records
@@ -82,3 +83,37 @@ def test_no_training_command_composes_and_writes_without_wandb_credentials(tmp_p
     assert resolved.wandb.mode == "disabled"
     assert (tmp_path / "run" / "provenance.json").is_file()
     assert provenance["git"]["revision"]
+
+
+def test_existing_run_records_are_never_replaced(tmp_path):
+    project_root = tmp_path / "repository"
+    project_root.mkdir()
+    _make_repository(project_root)
+    output_dir = tmp_path / "run"
+    write_run_records(OmegaConf.create({"name": "original"}), output_dir, project_root)
+    original_config = (output_dir / "resolved_config.yaml").read_text()
+    original_provenance = (output_dir / "provenance.json").read_text()
+
+    with pytest.raises(FileExistsError, match="refusing to replace"):
+        write_run_records(OmegaConf.create({"name": "replacement"}), output_dir, project_root)
+
+    assert (output_dir / "resolved_config.yaml").read_text() == original_config
+    assert (output_dir / "provenance.json").read_text() == original_provenance
+
+
+def test_remote_credentials_are_removed_from_provenance(tmp_path):
+    project_root = tmp_path / "repository"
+    project_root.mkdir()
+    _make_repository(project_root)
+    _run_git(
+        project_root,
+        "remote",
+        "add",
+        "origin",
+        "https://user:top-secret@github.com/example/project.git",
+    )
+
+    provenance = write_run_records(OmegaConf.create({"name": "safe"}), tmp_path / "run", project_root)
+
+    assert provenance["git"]["origin"] == "https://github.com/example/project.git"
+    assert "top-secret" not in (tmp_path / "run" / "provenance.json").read_text()
