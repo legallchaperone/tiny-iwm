@@ -1,4 +1,8 @@
 torch
+accelerate
+diffusers
+huggingface-hub
+safetensors
 numpy
 torchvision
 wandb
