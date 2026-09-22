@@ -32,6 +32,7 @@ def _codec(normalizer: ChannelNormalizer, **changes) -> CodecSpec:
         causal=True,
         encoding_policy="prefix_causal_v1",
         execution_dtype="float32",
+        cuda_math_policy="strict_no_tf32_no_reduced_reduction_v1",
         normalization=normalizer.stats,
     )
     return replace(spec, **changes)
@@ -123,6 +124,10 @@ def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
     ) == 6
     assert baseline.payload["codec"]["encoding_policy"] == "prefix_causal_v1"
     assert baseline.payload["codec"]["execution_dtype"] == "float32"
+    assert (
+        baseline.payload["codec"]["cuda_math_policy"]
+        == "strict_no_tf32_no_reduced_reduction_v1"
+    )
     assert baseline.payload["normalization"]["training_split"] == "train"
 
 
@@ -342,7 +347,7 @@ def test_sana_adapter_disables_ambient_autocast_for_codec_calls():
     assert adapter._model.last_decode_dtype == torch.float32
 
 
-def test_cuda_float32_math_mode_pins_and_restores_tf32_policy():
+def test_cuda_math_mode_rejects_mismatched_process_policy_without_mutating_it():
     original_cudnn = torch.backends.cudnn.allow_tf32
     original_matmul = {
         "allow_tf32": torch.backends.cuda.matmul.allow_tf32,
@@ -359,16 +364,24 @@ def test_cuda_float32_math_mode_pins_and_restores_tf32_policy():
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
     torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
     try:
-        with _codec_math_mode("cuda", torch.float32):
-            assert not torch.backends.cudnn.allow_tf32
-            assert not torch.backends.cuda.matmul.allow_tf32
-            assert not torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
-            assert not torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
-            assert not torch.backends.cuda.matmul.allow_fp16_accumulation
+        with pytest.raises(RuntimeError, match="cudnn.allow_tf32"):
+            with _codec_math_mode(
+                "cuda", "strict_no_tf32_no_reduced_reduction_v1"
+            ):
+                pass
         assert torch.backends.cudnn.allow_tf32
         assert torch.backends.cuda.matmul.allow_tf32
         assert torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
         assert torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+        torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
+        torch.backends.cuda.matmul.allow_fp16_accumulation = False
+        with _codec_math_mode(
+            "cuda", "strict_no_tf32_no_reduced_reduction_v1"
+        ):
+            pass
     finally:
         torch.backends.cudnn.allow_tf32 = original_cudnn
         for policy, enabled in original_matmul.items():

@@ -57,6 +57,7 @@ class CacheIdentity:
                 "causal": self.codec.causal,
                 "encoding_policy": self.codec.encoding_policy,
                 "execution_dtype": self.codec.execution_dtype,
+                "cuda_math_policy": self.codec.cuda_math_policy,
             },
             "normalization": {
                 "identity": stats.identity,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from threading import RLock
 from typing import Iterator
 
 import torch
@@ -12,9 +11,6 @@ from torch import nn
 
 from representations.base import CodecSpec, Representation
 from representations.normalization import ChannelNormalizer
-
-
-_TF32_POLICY_LOCK = RLock()
 
 
 class SanaCausalVideoVAEAdapter(Representation):
@@ -54,7 +50,7 @@ class SanaCausalVideoVAEAdapter(Representation):
         _validate_video_tensor(codec_video, "codec video")
         self._model.eval()
         with torch.no_grad(), _codec_math_mode(
-            codec_video.device.type, self._codec_dtype
+            codec_video.device.type, self.spec.cuda_math_policy
         ):
             latents = self._model.encode(codec_video)
         _validate_video_tensor(latents, "codec latents")
@@ -69,7 +65,9 @@ class SanaCausalVideoVAEAdapter(Representation):
             latents = latents.to(dtype=self._codec_dtype)
         _validate_video_tensor(latents, "codec latents")
         self._model.eval()
-        with torch.no_grad(), _codec_math_mode(latents.device.type, self._codec_dtype):
+        with torch.no_grad(), _codec_math_mode(
+            latents.device.type, self.spec.cuda_math_policy
+        ):
             video = self._model.decode(latents)
         _validate_video_tensor(video, "decoded video")
         return video
@@ -99,34 +97,35 @@ def _dtype_name(dtype: torch.dtype) -> str:
 
 @contextmanager
 def _codec_math_mode(
-    device_type: str, dtype: torch.dtype
+    device_type: str, cuda_math_policy: str
 ) -> Iterator[None]:
-    """Run with declared precision, isolated from ambient autocast and TF32."""
+    """Disable autocast and verify the declared process-wide CUDA policy."""
 
     with torch.autocast(device_type=device_type, enabled=False):
-        if device_type != "cuda":
-            yield
-            return
-        with _TF32_POLICY_LOCK:
-            cudnn_tf32 = torch.backends.cudnn.allow_tf32
-            matmul_policies = {
-                "allow_tf32": torch.backends.cuda.matmul.allow_tf32,
-                "allow_fp16_reduced_precision_reduction": (
-                    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
-                ),
-                "allow_bf16_reduced_precision_reduction": (
-                    torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
-                ),
-                "allow_fp16_accumulation": (
-                    torch.backends.cuda.matmul.allow_fp16_accumulation
-                ),
-            }
-            try:
-                torch.backends.cudnn.allow_tf32 = False
-                for policy in matmul_policies:
-                    setattr(torch.backends.cuda.matmul, policy, False)
-                yield
-            finally:
-                torch.backends.cudnn.allow_tf32 = cudnn_tf32
-                for policy, enabled in matmul_policies.items():
-                    setattr(torch.backends.cuda.matmul, policy, enabled)
+        if device_type == "cuda":
+            _validate_cuda_math_policy(cuda_math_policy)
+        yield
+
+
+def _validate_cuda_math_policy(cuda_math_policy: str) -> None:
+    if cuda_math_policy != "strict_no_tf32_no_reduced_reduction_v1":
+        raise ValueError("unsupported CUDA math policy")
+    enabled = {
+        "cudnn.allow_tf32": torch.backends.cudnn.allow_tf32,
+        "matmul.allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+        "matmul.allow_fp16_reduced_precision_reduction": (
+            torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
+        ),
+        "matmul.allow_bf16_reduced_precision_reduction": (
+            torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
+        ),
+        "matmul.allow_fp16_accumulation": (
+            torch.backends.cuda.matmul.allow_fp16_accumulation
+        ),
+    }
+    violations = [name for name, value in enabled.items() if value]
+    if violations:
+        raise RuntimeError(
+            "CUDA backend does not match strict codec math policy: "
+            + ", ".join(violations)
+        )

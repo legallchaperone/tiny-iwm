@@ -86,6 +86,7 @@ class LatentSpec:
     causal: bool
     encoding_policy: str
     execution_dtype: str
+    cuda_math_policy: str
 
     def __post_init__(self) -> None:
         if self.channels <= 0 or self.temporal_compression <= 0:
@@ -94,12 +95,20 @@ class LatentSpec:
             value <= 0 for value in self.spatial_compression
         ):
             raise ValueError("spatial_compression must contain two positive values")
-        if not self.codec_id or not self.encoding_policy or not self.execution_dtype:
+        if (
+            not self.codec_id
+            or not self.encoding_policy
+            or not self.execution_dtype
+            or not self.cuda_math_policy
+        ):
             raise ValueError(
-                "codec_id, encoding_policy, and execution_dtype must be explicit"
+                "codec_id, encoding_policy, execution_dtype, and cuda_math_policy "
+                "must be explicit"
             )
         if self.execution_dtype not in {"float16", "bfloat16", "float32", "float64"}:
             raise ValueError("execution_dtype must name a supported floating dtype")
+        if self.cuda_math_policy != "strict_no_tf32_no_reduced_reduction_v1":
+            raise ValueError("unsupported cuda_math_policy")
 
 
 @dataclass(frozen=True)

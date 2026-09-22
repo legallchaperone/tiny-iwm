@@ -9,6 +9,7 @@ temporal_compression: null
 latent_channels: null
 encoding_policy: null
 execution_dtype: null  # required; float16, bfloat16, float32, or float64
+cuda_math_policy: strict_no_tf32_no_reduced_reduction_v1
 normalization:
   kind: frozen_channel_stats
   training_split: train
