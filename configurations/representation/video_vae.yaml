@@ -1,10 +1,21 @@
-kind: frozen_video_autoencoder
+kind: sana_causal_video_vae
+upstream: SANA
 frozen: true
 checkpoint: null       # unresolved pretrained codec weights
+weights_sha256: null   # required when a checkpoint is selected
 temporal_causal: null  # unresolved encoding convention
 spatial_compression: null
 temporal_compression: null
 latent_channels: null
+encoding_policy: null
+execution_dtype: null  # required; float16, bfloat16, float32, or float64
+execution_backend: null  # required; cpu, cuda, or mps
+backend_fingerprint: null  # required; generated from runtime and hardware
+cuda_math_policy: strict_no_tf32_no_reduced_reduction_v1
 normalization:
+  kind: frozen_channel_stats
+  training_split: train
+  training_data_version: null
+  statistics_sha256: null
   mean: null
   std: null
