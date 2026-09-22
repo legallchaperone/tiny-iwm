@@ -147,10 +147,12 @@ def _atomic_create_files(contents: Mapping[Path, str]) -> None:
                 suffix=".tmp",
                 delete=False,
             ) as temporary:
+                # Register the path before the first fallible write so the
+                # finally block also cleans up disk-full and I/O failures.
+                temporary_files[path] = Path(temporary.name)
                 temporary.write(content)
                 temporary.flush()
                 os.fsync(temporary.fileno())
-                temporary_files[path] = Path(temporary.name)
 
         # Hard-link publication is atomic and fails if a concurrent writer created
         # the destination. It therefore never replaces an existing run record.

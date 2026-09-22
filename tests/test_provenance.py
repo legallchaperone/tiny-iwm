@@ -7,6 +7,7 @@ from omegaconf import OmegaConf
 import pytest
 
 from scripts.write_run_records import compose_and_write
+import utils.provenance as provenance_module
 from utils.provenance import write_run_records
 
 
@@ -117,3 +118,36 @@ def test_remote_credentials_are_removed_from_provenance(tmp_path):
 
     assert provenance["git"]["origin"] == "https://github.com/example/project.git"
     assert "top-secret" not in (tmp_path / "run" / "provenance.json").read_text()
+
+
+def test_temporary_record_is_removed_when_write_fails(tmp_path, monkeypatch):
+    original_factory = provenance_module.tempfile.NamedTemporaryFile
+    temporary_paths = []
+
+    class FailingWrite:
+        def __init__(self, temporary):
+            self.temporary = temporary
+            self.name = temporary.name
+
+        def __enter__(self):
+            self.temporary.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.temporary.__exit__(*args)
+
+        def write(self, _content):
+            raise OSError("simulated disk failure")
+
+    def failing_factory(*args, **kwargs):
+        temporary = original_factory(*args, **kwargs)
+        temporary_paths.append(Path(temporary.name))
+        return FailingWrite(temporary)
+
+    monkeypatch.setattr(provenance_module.tempfile, "NamedTemporaryFile", failing_factory)
+
+    with pytest.raises(OSError, match="simulated disk failure"):
+        provenance_module._atomic_create_files({tmp_path / "record.json": "secret"})
+
+    assert temporary_paths
+    assert all(not path.exists() for path in temporary_paths)
