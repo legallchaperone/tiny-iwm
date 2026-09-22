@@ -21,6 +21,7 @@ from utils.print_utils import cyan
 from utils.distributed_utils import is_rank_zero
 from utils.ckpt_utils import download_latest_checkpoint, is_run_id
 from utils.cluster_utils import submit_slurm_job
+from utils.provenance import write_run_records
 
 
 def run_local(cfg: DictConfig):
@@ -45,6 +46,7 @@ def run_local(cfg: DictConfig):
         print(cyan(f"Outputs will be saved to:"), output_dir)
         (output_dir.parents[1] / "latest-run").unlink(missing_ok=True)
         (output_dir.parents[1] / "latest-run").symlink_to(output_dir, target_is_directory=True)
+        write_run_records(cfg, output_dir, Path(__file__).parent)
 
     # Resolve ckpt path
     resume = cfg.get("resume", None)
