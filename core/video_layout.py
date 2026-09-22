@@ -8,6 +8,7 @@ instead of reimplementing stride, boundary, or padding arithmetic.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil
 from typing import Tuple
 
 
@@ -24,6 +25,24 @@ class FrameRange:
 
     def __len__(self) -> int:
         return self.stop - self.start
+
+
+@dataclass(frozen=True)
+class CodecTemporalSpec:
+    """Codec properties that determine temporal latent geometry.
+
+    Causal video codecs commonly encode the first RGB frame independently and
+    then compress fixed-size groups of later frames. Setting
+    ``first_frame_is_independent=False`` describes codecs that compress every
+    frame in uniform groups.
+    """
+
+    temporal_compression: int
+    first_frame_is_independent: bool = True
+
+    def __post_init__(self) -> None:
+        if self.temporal_compression <= 0:
+            raise ValueError("temporal_compression must be positive")
 
 
 @dataclass(frozen=True)
@@ -45,6 +64,8 @@ class VideoLayout:
     chunk_to_latent: Tuple[FrameRange, ...]
     rgb_is_padding: Tuple[bool, ...]
     initial_condition_rgb: FrameRange
+    valid_rgb_frame_count: int | None = None
+    token_to_latent_ranges: Tuple[FrameRange, ...] = ()
 
     def __post_init__(self) -> None:
         if self.fps <= 0:
@@ -57,6 +78,21 @@ class VideoLayout:
             raise ValueError("rgb_is_padding must contain one value per RGB frame")
         if self.initial_condition_rgb.stop > self.rgb_frame_count:
             raise ValueError("initial condition extends beyond RGB frames")
+        if self.valid_rgb_frame_count is None:
+            valid_count = next(
+                (index for index, padded in enumerate(self.rgb_is_padding) if padded),
+                self.rgb_frame_count,
+            )
+        else:
+            valid_count = self.valid_rgb_frame_count
+        if not 0 < valid_count <= self.rgb_frame_count:
+            raise ValueError("valid_rgb_frame_count must be within the RGB extent")
+        object.__setattr__(self, "valid_rgb_frame_count", valid_count)
+        expected_padding = tuple(
+            index >= valid_count for index in range(self.rgb_frame_count)
+        )
+        if self.rgb_is_padding != expected_padding:
+            raise ValueError("rgb_is_padding must mark only the padded RGB suffix")
         for rgb_range in self.latent_to_rgb:
             if rgb_range.stop > self.rgb_frame_count:
                 raise ValueError("latent_to_rgb range extends beyond RGB frames")
@@ -66,6 +102,77 @@ class VideoLayout:
         for latent_range in self.chunk_to_latent:
             if latent_range.stop > self.latent_frame_count:
                 raise ValueError("chunk_to_latent range extends beyond latent frames")
+        token_ranges = self.token_to_latent_ranges
+        if not token_ranges:
+            token_ranges = tuple(FrameRange(index, index + 1) for index in self.token_to_latent)
+            object.__setattr__(self, "token_to_latent_ranges", token_ranges)
+        if len(token_ranges) != len(self.token_to_latent):
+            raise ValueError("token range and representative mappings must align")
+        for representative, latent_range in zip(self.token_to_latent, token_ranges):
+            if latent_range.stop > self.latent_frame_count:
+                raise ValueError("token latent range extends beyond latent frames")
+            if representative != latent_range.start:
+                raise ValueError("token representative must be the start of its latent range")
+
+    @classmethod
+    def from_codec(
+        cls,
+        *,
+        fps: float,
+        rgb_frame_count: int,
+        codec: CodecTemporalSpec,
+        temporal_patch_size: int = 1,
+        latent_chunk_size: int = 1,
+        initial_condition_frames: int = 1,
+    ) -> "VideoLayout":
+        """Derive every temporal mapping from input length and codec properties.
+
+        The returned RGB extent includes codec-required suffix padding.
+        ``valid_rgb_frame_count`` preserves the requested output length, which is
+        what writers use after decoding.
+        """
+
+        if rgb_frame_count <= 0:
+            raise ValueError("rgb_frame_count must be positive")
+        if temporal_patch_size <= 0 or latent_chunk_size <= 0:
+            raise ValueError("patch and chunk sizes must be positive")
+        if not 0 < initial_condition_frames <= rgb_frame_count:
+            raise ValueError("initial_condition_frames must be within the input")
+
+        stride = codec.temporal_compression
+        if codec.first_frame_is_independent:
+            compressed_count = ceil(max(0, rgb_frame_count - 1) / stride)
+            latent_count = 1 + compressed_count
+            padded_rgb_count = 1 + compressed_count * stride
+            latent_ranges = [FrameRange(0, 1)]
+            latent_ranges.extend(
+                FrameRange(1 + index * stride, 1 + (index + 1) * stride)
+                for index in range(compressed_count)
+            )
+        else:
+            latent_count = ceil(rgb_frame_count / stride)
+            padded_rgb_count = latent_count * stride
+            latent_ranges = [
+                FrameRange(index * stride, (index + 1) * stride)
+                for index in range(latent_count)
+            ]
+
+        token_ranges = tuple(_partition(latent_count, temporal_patch_size))
+        chunks = tuple(_partition(latent_count, latent_chunk_size))
+        return cls(
+            fps=fps,
+            rgb_frame_count=padded_rgb_count,
+            latent_frame_count=latent_count,
+            latent_to_rgb=tuple(latent_ranges),
+            token_to_latent=tuple(item.start for item in token_ranges),
+            chunk_to_latent=chunks,
+            rgb_is_padding=tuple(
+                index >= rgb_frame_count for index in range(padded_rgb_count)
+            ),
+            initial_condition_rgb=FrameRange(0, initial_condition_frames),
+            valid_rgb_frame_count=rgb_frame_count,
+            token_to_latent_ranges=token_ranges,
+        )
 
     def rgb_range_for_latent(self, latent_index: int) -> FrameRange:
         if not 0 <= latent_index < self.latent_frame_count:
@@ -76,6 +183,11 @@ class VideoLayout:
         if not 0 <= token_index < len(self.token_to_latent):
             raise IndexError("token index out of range")
         return self.token_to_latent[token_index]
+
+    def latent_range_for_token(self, token_index: int) -> FrameRange:
+        if not 0 <= token_index < len(self.token_to_latent_ranges):
+            raise IndexError("token index out of range")
+        return self.token_to_latent_ranges[token_index]
 
     def latent_range_for_chunk(self, chunk_index: int) -> FrameRange:
         if not 0 <= chunk_index < len(self.chunk_to_latent):
@@ -91,3 +203,54 @@ class VideoLayout:
         if not 0 <= rgb_index < self.rgb_frame_count:
             raise IndexError("RGB frame index out of range")
         return self.rgb_is_padding[rgb_index]
+
+    @property
+    def output_rgb_frame_count(self) -> int:
+        """Number of unpadded frames that a decoder writer must emit."""
+
+        assert self.valid_rgb_frame_count is not None
+        return self.valid_rgb_frame_count
+
+    def camera_rgb_index_for_latent(self, latent_index: int) -> int:
+        """Choose the last real RGB observation covered by a latent timestep."""
+
+        rgb_range = self.rgb_range_for_latent(latent_index)
+        return min(rgb_range.stop, self.output_rgb_frame_count) - 1
+
+    def camera_rgb_indices_for_chunk(self, chunk_index: int) -> Tuple[int, ...]:
+        """Return camera samples for a model chunk via the canonical mapping."""
+
+        latent_range = self.latent_range_for_chunk(chunk_index)
+        return tuple(
+            self.camera_rgb_index_for_latent(index)
+            for index in range(latent_range.start, latent_range.stop)
+        )
+
+    def writer_rgb_indices_for_chunk(self, chunk_index: int) -> Tuple[int, ...]:
+        """Return decoded, unpadded RGB indices a writer should emit for a chunk."""
+
+        latent_range = self.latent_range_for_chunk(chunk_index)
+        start = self.latent_to_rgb[latent_range.start].start
+        stop = min(
+            self.latent_to_rgb[latent_range.stop - 1].stop,
+            self.output_rgb_frame_count,
+        )
+        return tuple(range(start, stop))
+
+    def token_time_range_seconds(self, token_index: int) -> Tuple[float, float]:
+        """Return the physical RGB time interval represented by one temporal token."""
+
+        latent_range = self.latent_range_for_token(token_index)
+        first = self.latent_to_rgb[latent_range.start]
+        last = self.latent_to_rgb[latent_range.stop - 1]
+        return (
+            first.start / self.fps,
+            min(last.stop, self.output_rgb_frame_count) / self.fps,
+        )
+
+
+def _partition(length: int, group_size: int) -> Tuple[FrameRange, ...]:
+    return tuple(
+        FrameRange(start, min(start + group_size, length))
+        for start in range(0, length, group_size)
+    )
