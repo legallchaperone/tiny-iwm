@@ -87,33 +87,49 @@ def validate_complete_sample(
     )
     if history_latent_count <= 0:
         raise ValueError("causality split leaves no history latents")
-    perturbed_video = video.clone()
-    future = perturbed_video[:, :, settings.future_start_rgb : settings.rgb_frame_count]
-    replacement = 0.0 if float(future.mean()) >= 0.5 else 1.0
-    future.fill_(replacement)
-    if torch.equal(
-        future,
-        video[:, :, settings.future_start_rgb : settings.rgb_frame_count],
-    ):
-        raise ValueError("future perturbation did not change the input")
-    if layout.rgb_frame_count > settings.rgb_frame_count:
-        perturbed_video[:, :, settings.rgb_frame_count :] = perturbed_video[
-            :, :, settings.rgb_frame_count - 1 : settings.rgb_frame_count
+    perturbation_results: list[dict[str, object]] = []
+    changed_perturbations = 0
+    max_history_delta = 0.0
+    original_future = video[
+        :, :, settings.future_start_rgb : settings.rgb_frame_count
+    ]
+    for replacement in (0.0, 1.0):
+        perturbed_video = video.clone()
+        future = perturbed_video[
+            :, :, settings.future_start_rgb : settings.rgb_frame_count
         ]
-    perturbed_latents = codec.encode(perturbed_video)
-    _validate_finite_tensor(perturbed_latents, "perturbed codec latents")
-    if perturbed_latents.shape != latents.shape:
-        raise ValueError("codec latent shape changed after future perturbation")
-    history_delta = (
-        latents[:, :, :history_latent_count]
-        - perturbed_latents[:, :, :history_latent_count]
-    ).abs()
-    max_history_delta = float(history_delta.max())
-    if max_history_delta > settings.causality_atol:
-        raise ValueError(
-            "codec causality check failed: future RGB changed history latents "
-            f"by {max_history_delta:.9g} (allowed {settings.causality_atol:.9g})"
+        future.fill_(replacement)
+        changed = not torch.equal(future, original_future)
+        changed_perturbations += int(changed)
+        if layout.rgb_frame_count > settings.rgb_frame_count:
+            perturbed_video[:, :, settings.rgb_frame_count :] = perturbed_video[
+                :, :, settings.rgb_frame_count - 1 : settings.rgb_frame_count
+            ]
+        perturbed_latents = codec.encode(perturbed_video)
+        _validate_finite_tensor(perturbed_latents, "perturbed codec latents")
+        if perturbed_latents.shape != latents.shape:
+            raise ValueError("codec latent shape changed after future perturbation")
+        history_delta = (
+            latents[:, :, :history_latent_count]
+            - perturbed_latents[:, :, :history_latent_count]
+        ).abs()
+        perturbation_delta = float(history_delta.max())
+        max_history_delta = max(max_history_delta, perturbation_delta)
+        perturbation_results.append(
+            {
+                "replacement_value": replacement,
+                "changed_input": changed,
+                "max_abs_history_latent_delta": perturbation_delta,
+            }
         )
+        if perturbation_delta > settings.causality_atol:
+            raise ValueError(
+                "codec causality check failed: future RGB changed history latents "
+                f"by {perturbation_delta:.9g} with replacement {replacement:.1f} "
+                f"(allowed {settings.causality_atol:.9g})"
+            )
+    if changed_perturbations == 0:
+        raise ValueError("future perturbations did not change the input")
 
     valid_video = video[:, :, : settings.rgb_frame_count].detach().to(
         device="cpu", dtype=torch.float64
@@ -126,6 +142,9 @@ def validate_complete_sample(
     mae = float(error.abs().mean())
     if not isfinite(mse) or not isfinite(mae):
         raise ValueError("reconstruction metrics must be finite")
+    psnr = None if mse == 0 else -10.0 * log10(mse)
+    if psnr is not None and not isfinite(psnr):
+        raise ValueError("reconstruction PSNR must be finite")
     cache_identity = CacheIdentity(
         data_version=sample.record.data_version,
         sample_id=sample.record.sample_id,
@@ -199,11 +218,12 @@ def validate_complete_sample(
             "history_latent_count": history_latent_count,
             "max_abs_history_latent_delta": max_history_delta,
             "atol": settings.causality_atol,
+            "perturbations": perturbation_results,
         },
         "reconstruction": {
             "mse": mse,
             "mae": mae,
-            "psnr_db": None if mse == 0 else 10.0 * log10(1.0 / mse),
+            "psnr_db": psnr,
             "minimum": float(valid_reconstruction.min()),
             "maximum": float(valid_reconstruction.max()),
         },

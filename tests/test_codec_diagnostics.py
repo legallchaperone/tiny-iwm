@@ -94,6 +94,24 @@ class UniformPaddingLeakCodec(CausalFixtureCodec):
         return normalized_latents.repeat_interleave(4, dim=2)
 
 
+class FutureMaximumLeakCodec(CausalFixtureCodec):
+    def encode(self, video: torch.Tensor) -> torch.Tensor:
+        latents = super().encode(video)
+        future_maximum = video[:, :, 481:].amax(dim=(2, 3, 4), keepdim=True)
+        return latents + future_maximum
+
+
+class TinyReconstructionErrorCodec(CausalFixtureCodec):
+    def decode(self, normalized_latents: torch.Tensor) -> torch.Tensor:
+        batch, _, _, height, width = normalized_latents.shape
+        return torch.full(
+            (batch, 3, 961, height, width),
+            1e-155,
+            dtype=torch.float64,
+            device=normalized_latents.device,
+        )
+
+
 def _record(**changes) -> ManifestRecord:
     values = {
         "sample_id": "held-out-961",
@@ -154,6 +172,9 @@ def test_complete_961_frame_gate_records_layout_camera_metrics_and_cache():
     assert report["camera_alignment"]["last_timestamp_seconds"] == 60.0
     assert report["causality"]["history_latent_count"] == 121
     assert report["causality"]["max_abs_history_latent_delta"] == 0.0
+    assert [
+        item["replacement_value"] for item in report["causality"]["perturbations"]
+    ] == [0.0, 1.0]
     assert report["latents"]["shape_bcthw"] == [1, 3, 241, 4, 4]
     assert report["cache"]["frame_count"] == 961
     assert len(report["cache"]["key"]) == 64
@@ -212,6 +233,42 @@ def test_future_perturbation_regenerates_layout_padding_before_causality_check()
             layout=uniform_layout,
             preprocessing={"color_space": "RGB"},
         )
+
+
+def test_zero_and_one_perturbations_catch_future_maximum_leak():
+    sample = _sample()
+    frames = np.zeros_like(sample.frames_rgb)
+    frames[700, 0, 0] = 255
+    sparse_future = SANASample(sample.record, frames, sample.camera, sample.metadata)
+
+    with pytest.raises(ValueError, match="replacement 0.0"):
+        validate_complete_sample(
+            sparse_future,
+            codec=FutureMaximumLeakCodec(),
+            layout=_layout(),
+            preprocessing={"color_space": "RGB"},
+        )
+
+
+def test_subnormal_mse_produces_finite_psnr_without_reciprocal_overflow():
+    sample = _sample()
+    zero_sample = SANASample(
+        sample.record,
+        np.zeros_like(sample.frames_rgb),
+        sample.camera,
+        sample.metadata,
+    )
+
+    report = validate_complete_sample(
+        zero_sample,
+        codec=TinyReconstructionErrorCodec(),
+        layout=_layout(),
+        preprocessing={"color_space": "RGB"},
+    )
+
+    assert report["reconstruction"]["mse"] == pytest.approx(1e-310)
+    assert report["reconstruction"]["psnr_db"] == pytest.approx(3100.0)
+    json.dumps(report, allow_nan=False)
 
 
 def test_gate_rejects_camera_timestamps_not_aligned_to_16_fps():
