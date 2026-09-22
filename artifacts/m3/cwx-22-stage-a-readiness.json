@@ -1,0 +1,88 @@
+{
+  "camera_conditioning": {
+    "counterfactual_max_abs_delta": 1.2265625,
+    "counterfactual_mean_abs_delta": 0.19265958666801453,
+    "counterfactual_relative_l2": 0.17388522624969482,
+    "inspection": "actual trajectory versus first-camera-frozen counterfactual"
+  },
+  "checkpoint_resume": {
+    "epoch": 3,
+    "evaluation_weights": "ema",
+    "global_step": 50,
+    "restored_scope": [
+      "model",
+      "optimizer",
+      "scheduler",
+      "ema",
+      "global_step",
+      "epoch",
+      "rng_python",
+      "rng_torch_cpu",
+      "rng_torch_cuda"
+    ],
+    "run_id": "stage-a-sekai-subset-seed21-v1",
+    "verified": true
+  },
+  "decision": {
+    "checks": {
+      "camera_response_measurable": true,
+      "checkpoint_resume_verified": true,
+      "condition_preserved": true,
+      "formal_length_executable": true,
+      "generation_finite": true,
+      "traceable_profile": true
+    },
+    "mechanically_ready_for_stage_b_initialization": true,
+    "status": "passed_with_quality_warning"
+  },
+  "diagnosis": {
+    "downstream_scope": "Suitable as the mechanically verified Stage B initialization baseline; do not treat its generation metric as a quality target.",
+    "ema_observation": "CWX-21 recorded identical BF16-rounded EMA validation loss at steps 50 and 100; the deterministic tie-break selected step 50.",
+    "quality_warning": "This is a 100-step baseline. Finite conditional generation and camera response establish integration readiness, not perceptual convergence."
+  },
+  "formal_length": {
+    "completed": true,
+    "forward_seconds": 0.5290437419999989,
+    "latent_shape": [
+      1,
+      128,
+      121,
+      4,
+      4
+    ],
+    "output_mean": 0.0081314817070961,
+    "output_std": 1.1190259456634521,
+    "peak_allocated_bytes": 2461901824,
+    "rgb_frames": 961,
+    "tokens": 484
+  },
+  "hardware": {
+    "cuda_runtime": "12.8",
+    "device": "NVIDIA A10",
+    "gpu_request": "A10G",
+    "platform": "Modal",
+    "torch": "2.8.0+cu128"
+  },
+  "issue": "CWX-22",
+  "modal_run_url": "https://modal.com/apps/cwx-80046/main/ap-9xURXdct8wfLJrvTCTsohE",
+  "sample_id": "00900100002_0001050_0002850_s000000",
+  "schema_version": 1,
+  "short_term_generation": {
+    "condition_max_abs_error": 0.0,
+    "duration_seconds": 8.0,
+    "latent_frames": 17,
+    "output_mean": -0.006022348999977112,
+    "output_std": 1.4424022436141968,
+    "rgb_frames": 129,
+    "seed": 22002,
+    "solver": "Euler",
+    "steps": 8,
+    "target_mse": 2.918820381164551
+  },
+  "traceability": {
+    "checkpoint_id": "sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1",
+    "manifest_sha256": "sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf",
+    "profile_artifact_sha256": "sha256:c42835e74ace9e4ab46841b40a93b8e69eb12f7a92bf8c5c14e08bc4dc99b13c",
+    "training_artifact_sha256": "sha256:8118f8661d2a4900c23779dcac9d33c6a71d89f72f52f85e117fe5b9b240ca7d"
+  }
+}

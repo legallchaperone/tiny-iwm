@@ -55,3 +55,9 @@ from the pinned official SANA-WM latent archive and writes it to the persistent
 does not download anything. It trains 100 steps, validates EMA weights at steps
 50 and 100, and keeps the lowest validation-loss checkpoint with complete
 same-run resume state in the Volume.
+
+`modal run scripts/modal_stage_a_readiness.py` runs the CWX-22 gate against that
+persisted checkpoint. It restores the complete training state, applies EMA
+weights, executes the full 961-frame shape, generates an eight-second latent
+sample, and compares the real camera trajectory with a frozen-camera
+counterfactual. The report keeps quality limitations explicit.
