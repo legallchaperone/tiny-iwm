@@ -56,7 +56,11 @@ class ChannelNormalizer:
     """Apply a frozen affine transform to ``[B, C, T, H, W]`` latents."""
 
     def __init__(self, stats: NormalizationStats) -> None:
-        self.stats = stats
+        self._stats = stats
+
+    @property
+    def stats(self) -> NormalizationStats:
+        return self._stats
 
     @classmethod
     def fit_from_training(

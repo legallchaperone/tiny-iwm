@@ -29,7 +29,7 @@ class SanaCausalVideoVAEAdapter(Representation):
         self._model = model.eval()
         self._model.requires_grad_(False)
         self._spec = spec
-        self._normalizer = normalizer
+        self._normalizer = ChannelNormalizer(spec.normalization)
 
     @property
     def spec(self) -> CodecSpec:

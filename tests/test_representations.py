@@ -185,6 +185,19 @@ def test_sana_adapter_freezes_codec_and_round_trips_through_normalization():
     assert adapter.spec.as_latent_spec().codec_id.endswith("a" * 64)
 
 
+def test_sana_adapter_snapshots_injected_normalizer():
+    normalizer = _normalizer()
+    adapter = SanaCausalVideoVAEAdapter(
+        _OfficialCodecStub(), spec=_codec(normalizer), normalizer=normalizer
+    )
+    video = torch.tensor([0.5, 1.0, 1.5, 3.0]).view(2, 2, 1, 1, 1)
+    expected = torch.tensor([-1.0, -1.0, 1.0, 1.0]).view_as(video)
+
+    normalizer._stats = replace(normalizer.stats, mean=(999.0, 999.0))
+
+    torch.testing.assert_close(adapter.encode(video), expected)
+
+
 def test_codec_spec_rejects_normalization_channel_mismatch():
     normalizer = _normalizer()
 
