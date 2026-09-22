@@ -35,3 +35,13 @@ misses and retries do not spend GPU time on downloads.
 debug-size M2 gate. It connects Stage A batch construction, native Flow
 Matching, the joint DiT, camera PRoPE, backward gradients, and named probes.
 Pass `--output` to write the machine-readable report used by CWX-18.
+
+## M3 full-length profile
+
+`modal run scripts/modal_m3_profile.py` measures the 300M model with the full
+961-frame temporal layout on one A10G. The Modal image build installs PyTorch
+before the GPU function starts; this job has no model or dataset download. The
+GPU function records training and 16-step rollout time, peak CUDA memory,
+parameters, tokens, projected KV size, attention settings, and hardware. It
+also compares resolution and patch alternatives while holding 961 frames,
+16 FPS, and 60 seconds fixed.
