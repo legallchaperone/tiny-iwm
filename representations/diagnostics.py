@@ -171,6 +171,10 @@ def validate_complete_sample(
             "camera_frame_count": int(sample.camera.c2w.shape[0]),
             "first_latent_camera_rgb_index": camera_indices[0],
             "last_latent_camera_rgb_index": camera_indices[-1],
+            "latent_camera_rgb_indices": list(camera_indices),
+            "latent_camera_timestamps_seconds": [
+                float(timestamps[index]) for index in camera_indices
+            ],
             "first_timestamp_seconds": float(timestamps[0]),
             "last_timestamp_seconds": float(timestamps[-1]),
             "max_timestamp_error_seconds": float(timestamp_error.max()),

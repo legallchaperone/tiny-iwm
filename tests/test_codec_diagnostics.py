@@ -117,6 +117,9 @@ def test_complete_961_frame_gate_records_layout_camera_metrics_and_cache():
     assert report["layout"]["last_latent_rgb_range"] == {"start": 957, "stop": 961}
     assert report["layout"]["last_writer_rgb_index"] == 960
     assert report["camera_alignment"]["last_latent_camera_rgb_index"] == 960
+    assert len(report["camera_alignment"]["latent_camera_rgb_indices"]) == 241
+    assert report["camera_alignment"]["latent_camera_rgb_indices"][:2] == [0, 4]
+    assert report["camera_alignment"]["latent_camera_timestamps_seconds"][-1] == 60.0
     assert report["camera_alignment"]["last_timestamp_seconds"] == 60.0
     assert report["causality"]["history_latent_count"] == 121
     assert report["causality"]["max_abs_history_latent_delta"] == 0.0
