@@ -1,0 +1,46 @@
+{
+  "compatibility_checked_before_load": [
+    "model",
+    "codec",
+    "camera"
+  ],
+  "excluded_objectives": {
+    "df_timestep_mixture": false,
+    "self_rollout_loss": false
+  },
+  "execution": {
+    "device": "cpu",
+    "gpu_used": false,
+    "platform": "Modal"
+  },
+  "initialization": {
+    "ema": "copy_loaded_model_num_updates_0",
+    "epoch": 0,
+    "global_step": 0,
+    "optimizer": "fresh_adamw_empty_state",
+    "scheduler": "fresh_constant_last_epoch_0"
+  },
+  "issue": "CWX-24",
+  "modal_run_url": "https://modal.com/apps/cwx-80046/main/ap-nmAUg7Hf1oWHS3eg6GuGjF",
+  "parent_checkpoint_id": "sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1",
+  "resume_verification": {
+    "passed": true,
+    "restored_scope": [
+      "model",
+      "optimizer",
+      "scheduler",
+      "ema",
+      "global_step",
+      "epoch",
+      "rng_python",
+      "rng_torch_cpu",
+      "rng_torch_cuda"
+    ]
+  },
+  "schema_version": 1,
+  "source_checkpoint": "/stage-a/checkpoints/stage-a-best.pt",
+  "source_weights": "ema",
+  "stage_b_checkpoint": "/stage-a/checkpoints/stage-b-init.pt",
+  "stage_b_checkpoint_id": "sha256:0d2ca6371b7d3678ebcc62aa3d87109bbc661e275ab62050eaca004a60a16ef7",
+  "status": "passed"
+}

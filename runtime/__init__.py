@@ -1,6 +1,7 @@
 """World-model runtime, EMA, optimizer, and checkpoint lifecycle."""
 
 from .checkpoint import (
+    CheckpointCompatibility,
     CheckpointProvenance,
     CheckpointSelection,
     InitializedStage,
@@ -20,6 +21,7 @@ from .training import (
 )
 
 __all__ = [
+    "CheckpointCompatibility",
     "CheckpointProvenance",
     "CheckpointSelection",
     "ExponentialMovingAverage",
