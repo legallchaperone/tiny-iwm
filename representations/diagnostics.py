@@ -159,6 +159,7 @@ def validate_complete_sample(
     timestamps = sample.camera.timestamps_seconds
     expected_timestamps = np.arange(settings.rgb_frame_count, dtype=np.float64) / settings.fps
     timestamp_error = np.abs(timestamps - expected_timestamps)
+    timestamp_atol = _timestamp_tolerance_seconds(settings.fps)
 
     return {
         "schema_version": 1,
@@ -212,6 +213,7 @@ def validate_complete_sample(
             "first_timestamp_seconds": float(timestamps[0]),
             "last_timestamp_seconds": float(timestamps[-1]),
             "max_timestamp_error_seconds": float(timestamp_error.max()),
+            "timestamp_atol_seconds": timestamp_atol,
         },
         "causality": {
             "future_start_rgb": settings.future_start_rgb,
@@ -281,7 +283,12 @@ def _validate_sample_contract(
         raise ValueError("camera trajectory length does not match RGB frames")
     timestamps = sample.camera.timestamps_seconds
     expected = np.arange(settings.rgb_frame_count, dtype=np.float64) / settings.fps
-    if not np.allclose(timestamps, expected, rtol=0.0, atol=1e-6):
+    if not np.allclose(
+        timestamps,
+        expected,
+        rtol=0.0,
+        atol=_timestamp_tolerance_seconds(settings.fps),
+    ):
         raise ValueError("camera timestamps are not aligned to the declared FPS")
 
 
@@ -320,6 +327,12 @@ def _validate_finite_tensor(value: object, name: str) -> None:
         raise ValueError(f"{name} must have shape [B, C, T, H, W]")
     if not torch.is_floating_point(value) or not torch.isfinite(value).all():
         raise ValueError(f"{name} must contain finite floating-point values")
+
+
+def _timestamp_tolerance_seconds(fps: float) -> float:
+    """Allow at most one microsecond or 0.1% of one frame interval."""
+
+    return min(1e-6, (1.0 / fps) * 1e-3)
 
 
 def _json_value(value: object) -> object:

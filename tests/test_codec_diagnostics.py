@@ -289,6 +289,36 @@ def test_gate_rejects_camera_timestamps_not_aligned_to_16_fps():
         )
 
 
+def test_timestamp_tolerance_scales_below_a_high_fps_frame_interval():
+    sample = _sample()
+    high_fps_camera = CameraData(
+        sample.camera.c2w,
+        sample.camera.intrinsics,
+        np.arange(961, dtype=np.float64) * 1e-12,
+    )
+    high_fps_sample = SANASample(
+        sample.record,
+        sample.frames_rgb,
+        high_fps_camera,
+        sample.metadata,
+    )
+    high_fps_layout = VideoLayout.from_codec(
+        fps=1e9,
+        rgb_frame_count=961,
+        codec=CodecTemporalSpec(temporal_compression=4),
+        latent_chunk_size=64,
+    )
+
+    with pytest.raises(ValueError, match="timestamps are not aligned"):
+        validate_complete_sample(
+            high_fps_sample,
+            codec=CausalFixtureCodec(),
+            layout=high_fps_layout,
+            preprocessing={"color_space": "RGB"},
+            settings=CodecGateSettings(fps=1e9),
+        )
+
+
 @pytest.mark.parametrize("atol", [float("nan"), float("inf"), -1.0])
 def test_gate_settings_reject_nonfinite_or_negative_causality_tolerance(atol):
     with pytest.raises(ValueError, match="finite and non-negative"):
