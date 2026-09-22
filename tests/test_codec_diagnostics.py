@@ -83,15 +83,20 @@ class ExtremeLatentCodec(CausalFixtureCodec):
         )
 
 
-class UniformPaddingLeakCodec(CausalFixtureCodec):
+class UniformFixtureCodec(CausalFixtureCodec):
     def encode(self, video: torch.Tensor) -> torch.Tensor:
         batch, channels, _, height, width = video.shape
-        grouped = video.reshape(batch, channels, 241, 4, height, width).mean(dim=3)
-        padded_final_frame = video[:, :, -1:].mean(dim=(2, 3, 4), keepdim=True)
-        return grouped + padded_final_frame
+        return video.reshape(batch, channels, 241, 4, height, width).mean(dim=3)
 
     def decode(self, normalized_latents: torch.Tensor) -> torch.Tensor:
         return normalized_latents.repeat_interleave(4, dim=2)
+
+
+class UniformPaddingLeakCodec(UniformFixtureCodec):
+    def encode(self, video: torch.Tensor) -> torch.Tensor:
+        grouped = super().encode(video)
+        padded_final_frame = video[:, :, -1:].mean(dim=(2, 3, 4), keepdim=True)
+        return grouped + padded_final_frame
 
 
 class FutureMaximumLeakCodec(CausalFixtureCodec):
@@ -233,6 +238,40 @@ def test_future_perturbation_regenerates_layout_padding_before_causality_check()
             layout=uniform_layout,
             preprocessing={"color_space": "RGB"},
         )
+
+
+def test_cache_identity_separates_first_frame_and_uniform_temporal_layouts():
+    first_frame_report = validate_complete_sample(
+        _sample(),
+        codec=CausalFixtureCodec(),
+        layout=_layout(),
+        preprocessing={"color_space": "RGB"},
+    )
+    uniform_layout = VideoLayout.from_codec(
+        fps=16.0,
+        rgb_frame_count=961,
+        codec=CodecTemporalSpec(
+            temporal_compression=4,
+            first_frame_is_independent=False,
+        ),
+        latent_chunk_size=64,
+    )
+    uniform_report = validate_complete_sample(
+        _sample(),
+        codec=UniformFixtureCodec(),
+        layout=uniform_layout,
+        preprocessing={"color_space": "RGB"},
+    )
+
+    assert first_frame_report["cache"]["key"] != uniform_report["cache"]["key"]
+    first_layout = first_frame_report["cache"]["identity_payload"]["preprocessing"][
+        "video_layout"
+    ]
+    uniform_identity = uniform_report["cache"]["identity_payload"]["preprocessing"][
+        "video_layout"
+    ]
+    assert first_layout["rgb_frame_count"] == 961
+    assert uniform_identity["rgb_frame_count"] == 964
 
 
 def test_zero_and_one_perturbations_catch_future_maximum_leak():

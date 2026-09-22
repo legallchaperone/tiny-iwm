@@ -149,7 +149,10 @@ def validate_complete_sample(
         data_version=sample.record.data_version,
         sample_id=sample.record.sample_id,
         frame_indices=tuple(range(settings.rgb_frame_count)),
-        preprocessing=preprocessing,
+        preprocessing={
+            "sample_preprocessing": preprocessing,
+            "video_layout": _layout_cache_identity(layout),
+        },
         codec=codec.spec,
     )
     camera_indices = tuple(
@@ -333,6 +336,21 @@ def _timestamp_tolerance_seconds(fps: float) -> float:
     """Allow at most one microsecond or 0.1% of one frame interval."""
 
     return min(1e-6, (1.0 / fps) * 1e-3)
+
+
+def _layout_cache_identity(layout: VideoLayout) -> dict[str, object]:
+    """Return every temporal-layout input that can change latent contents."""
+
+    return {
+        "fps": layout.fps,
+        "rgb_frame_count": layout.rgb_frame_count,
+        "valid_rgb_frame_count": layout.output_rgb_frame_count,
+        "latent_frame_count": layout.latent_frame_count,
+        "latent_to_rgb": [
+            [rgb_range.start, rgb_range.stop] for rgb_range in layout.latent_to_rgb
+        ],
+        "rgb_is_padding": list(layout.rgb_is_padding),
+    }
 
 
 def _json_value(value: object) -> object:
