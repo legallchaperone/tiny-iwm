@@ -32,6 +32,15 @@ Bidirectional and causal execution differ only in the boolean
 Callers may request names from `model.observation_points` through `capture`;
 returned activations retain gradients for later regularizers and probes.
 
+Camera conditioning uses the same attention path through tiled PRoPE. Callers
+build `TokenCameraProjection` from an RGB-space `CameraCondition`, the canonical
+`VideoLayout`, the patched latent grid, and the post-transform RGB image size.
+The builder normalizes RGB intrinsics and constructs `P = lift(K) @ w2c`.
+Attention applies `P.T` to Q, `P^-1` to K/V, and `P` to the attention output.
+Temporal sub-frames come from each `VideoLayout` token range, and the configured
+leading head slice is divided evenly among them; no four-frame or fixed-token
+upstream layout is assumed.
+
 Each algorithm class takes in a DictConfig file `cfg` in its `__init__`, which allows you to pass in arguments via configuration file in `configurations/algorithm` or [command line override](https://hydra.cc/docs/tutorials/basic/your_first_app/simple_cli/).
 
 ---
