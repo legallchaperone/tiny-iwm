@@ -53,6 +53,7 @@ class SanaCausalVideoVAEAdapter(Representation):
         latents = self._normalizer.denormalize(normalized_latents)
         if self._codec_dtype is not None:
             latents = latents.to(dtype=self._codec_dtype)
+        _validate_video_tensor(latents, "codec latents")
         self._model.eval()
         with torch.no_grad():
             video = self._model.decode(latents)

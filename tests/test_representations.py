@@ -248,6 +248,26 @@ def test_sana_adapter_restores_reduced_codec_dtype_before_decode():
     torch.testing.assert_close(decoded, video)
 
 
+def test_sana_adapter_rejects_overflow_when_restoring_codec_dtype():
+    stats = NormalizationStats(
+        mean=(0.0, 0.0),
+        std=(2.0, 2.0),
+        training_data_version="wide-latent-v1",
+        sample_count=1,
+        value_count_per_channel=1,
+    )
+    normalizer = ChannelNormalizer(stats)
+    adapter = SanaCausalVideoVAEAdapter(
+        _OfficialCodecStub().half(),
+        spec=_codec(normalizer, normalization=stats),
+        normalizer=normalizer,
+    )
+    normalized = torch.full((1, 2, 1, 1, 1), 40_000.0)
+
+    with pytest.raises(ValueError, match="codec latents must contain finite"):
+        adapter.decode(normalized)
+
+
 def test_codec_spec_rejects_normalization_channel_mismatch():
     normalizer = _normalizer()
 
