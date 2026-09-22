@@ -613,10 +613,10 @@ sources:
       status: verified
     reuse_kind: adapted
     intended_local_targets:
-    - models/dit.py
-    - models/blocks.py
-    - models/position.py
-    - models/latent_io.py
+    - algorithms/world_model/models/dit.py
+    - algorithms/world_model/models/blocks.py
+    - algorithms/world_model/models/position.py
+    - algorithms/world_model/models/latent_io.py
     adaptation_notes: Reimplement the standard block, modulation, MLP, patching, and position components
       behind configurable dimensions. Initialize the DiT randomly and exclude implicit pretrained model
       loading and fixed upstream shapes.
@@ -629,10 +629,10 @@ sources:
       status: verified
     reuse_kind: adapted
     intended_local_targets:
-    - training/training_batch.py
-    - models/attention.py
-    - training/flow.py
-    - training/algorithm.py
+    - algorithms/world_model/training_batch.py
+    - algorithms/world_model/models/attention.py
+    - algorithms/world_model/flow.py
+    - algorithms/world_model/algorithm.py
     - inference/rollout.py
     - inference/history.py
     adaptation_notes: Use the clean/noisy visibility pattern, supervised flow organization, and clean-history
@@ -667,7 +667,7 @@ sources:
       status: verified
     reuse_kind: adapted
     intended_local_targets:
-    - models/prope.py
+    - algorithms/world_model/models/prope.py
     adaptation_notes: Adapt tiled PRoPE and the paired Q, K, V, and attention-output transforms to this
       project's dynamic VideoLayout, masks, and cache. Exclude Patch Memory, fixed four-sub-frame assumptions,
       and unrelated position experiments.
@@ -680,7 +680,7 @@ sources:
       status: missing-at-pinned-revision
     reuse_kind: reference-only
     intended_local_targets:
-    - models/prope.py
+    - algorithms/world_model/models/prope.py
     adaptation_notes: Use the implementation only to cross-check the published geometry. The pinned repository
       has no root license file, so do not copy or adapt its source unless licensing is clarified and this
       registry is updated.

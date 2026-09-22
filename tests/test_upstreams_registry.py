@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -60,3 +61,19 @@ def test_existing_template_scaffold_has_per_file_source_and_verification():
         assert verification["method"] == "tree-match-verified-in-CWX-5"
         assert len(verification["imported_local_commit"]) == 40
         assert verification["upstream_commit"] == source["commit"]
+
+
+def test_world_model_targets_follow_the_planned_package_layout():
+    sources = yaml.safe_load(REGISTRY.read_text())["sources"]
+
+    for source_name in ("wan-2.1", "causal-forcing", "matrix-game-3.5", "prope"):
+        targets = sources[source_name]["intended_local_targets"]
+        for target in targets:
+            if target.startswith(("models/", "training/")):
+                pytest.fail(f"{source_name} uses an unqualified target path: {target}")
+
+    assert "algorithms/world_model/models/dit.py" in sources["wan-2.1"]["intended_local_targets"]
+    assert "algorithms/world_model/training_batch.py" in sources["causal-forcing"]["intended_local_targets"]
+    assert sources["matrix-game-3.5"]["intended_local_targets"] == [
+        "algorithms/world_model/models/prope.py"
+    ]
