@@ -11,8 +11,9 @@ from representations import (
     CodecSpec,
     NormalizationStats,
     SanaCausalVideoVAEAdapter,
+    configure_cuda_math_policy,
 )
-from representations.video_vae import _codec_math_mode
+from representations.video_vae import _backend_fingerprint, _codec_math_mode
 
 
 def _normalizer() -> ChannelNormalizer:
@@ -32,6 +33,8 @@ def _codec(normalizer: ChannelNormalizer, **changes) -> CodecSpec:
         causal=True,
         encoding_policy="prefix_causal_v1",
         execution_dtype="float32",
+        execution_backend="cpu",
+        backend_fingerprint=_backend_fingerprint(torch.device("cpu")),
         cuda_math_policy="strict_no_tf32_no_reduced_reduction_v1",
         normalization=normalizer.stats,
     )
@@ -102,6 +105,13 @@ def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
 
     changed_codec = _identity(replace(codec, weights_sha256="b" * 64))
     changed_precision = _identity(replace(codec, execution_dtype="float16"))
+    changed_backend = _identity(
+        replace(
+            codec,
+            execution_backend="cuda",
+            backend_fingerprint="torch=test;backend=cuda;device=test",
+        )
+    )
     changed_preprocessing = _identity(
         codec, preprocessing={"resize": [256, 512], "crop": [0, 0, 256, 512]}
     )
@@ -117,13 +127,15 @@ def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
             baseline.key,
             changed_codec.key,
             changed_precision.key,
+            changed_backend.key,
             changed_preprocessing.key,
             changed_frames.key,
             changed_statistics.key,
         }
-    ) == 6
+    ) == 7
     assert baseline.payload["codec"]["encoding_policy"] == "prefix_causal_v1"
     assert baseline.payload["codec"]["execution_dtype"] == "float32"
+    assert baseline.payload["codec"]["execution_backend"] == "cpu"
     assert (
         baseline.payload["codec"]["cuda_math_policy"]
         == "strict_no_tf32_no_reduced_reduction_v1"
@@ -373,11 +385,7 @@ def test_cuda_math_mode_rejects_mismatched_process_policy_without_mutating_it():
         assert torch.backends.cuda.matmul.allow_tf32
         assert torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction
         assert torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction
-        torch.backends.cudnn.allow_tf32 = False
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
-        torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
-        torch.backends.cuda.matmul.allow_fp16_accumulation = False
+        configure_cuda_math_policy("strict_no_tf32_no_reduced_reduction_v1")
         with _codec_math_mode(
             "cuda", "strict_no_tf32_no_reduced_reduction_v1"
         ):

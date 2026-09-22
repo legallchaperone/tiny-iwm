@@ -43,7 +43,7 @@ class CacheIdentity:
     def payload(self) -> dict[str, object]:
         stats = self.codec.normalization
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "data_version": self.data_version,
             "sample_id": self.sample_id,
             "frame_indices": self.frame_indices,
@@ -57,6 +57,8 @@ class CacheIdentity:
                 "causal": self.codec.causal,
                 "encoding_policy": self.codec.encoding_policy,
                 "execution_dtype": self.codec.execution_dtype,
+                "execution_backend": self.codec.execution_backend,
+                "backend_fingerprint": self.codec.backend_fingerprint,
                 "cuda_math_policy": self.codec.cuda_math_policy,
             },
             "normalization": {

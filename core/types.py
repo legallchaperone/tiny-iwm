@@ -86,6 +86,8 @@ class LatentSpec:
     causal: bool
     encoding_policy: str
     execution_dtype: str
+    execution_backend: str
+    backend_fingerprint: str
     cuda_math_policy: str
 
     def __post_init__(self) -> None:
@@ -99,14 +101,18 @@ class LatentSpec:
             not self.codec_id
             or not self.encoding_policy
             or not self.execution_dtype
+            or not self.execution_backend
+            or not self.backend_fingerprint
             or not self.cuda_math_policy
         ):
             raise ValueError(
-                "codec_id, encoding_policy, execution_dtype, and cuda_math_policy "
-                "must be explicit"
+                "codec_id, encoding_policy, execution_dtype, execution_backend, "
+                "backend_fingerprint, and cuda_math_policy must be explicit"
             )
         if self.execution_dtype not in {"float16", "bfloat16", "float32", "float64"}:
             raise ValueError("execution_dtype must name a supported floating dtype")
+        if self.execution_backend not in {"cpu", "cuda", "mps"}:
+            raise ValueError("execution_backend must be cpu, cuda, or mps")
         if self.cuda_math_policy != "strict_no_tf32_no_reduced_reduction_v1":
             raise ValueError("unsupported cuda_math_policy")
 

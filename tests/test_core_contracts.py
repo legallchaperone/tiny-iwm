@@ -58,6 +58,8 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
         causal=True,
         encoding_policy="prefix_causal",
         execution_dtype="float32",
+        execution_backend="cpu",
+        backend_fingerprint="torch=test;backend=cpu;platform=test",
         cuda_math_policy="strict_no_tf32_no_reduced_reduction_v1",
     )
     camera = CameraCondition(
@@ -76,6 +78,7 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
 
     assert latent_spec.encoding_policy == "prefix_causal"
     assert latent_spec.execution_dtype == "float32"
+    assert latent_spec.execution_backend == "cpu"
     assert latent_spec.cuda_math_policy == "strict_no_tf32_no_reduced_reduction_v1"
     assert camera.extrinsics_convention == "camera_to_world"
     assert batch.sample_ids == ("scene-1",)
