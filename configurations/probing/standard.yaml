@@ -1,0 +1,5 @@
+enabled: true
+layers: null         # unresolved layer selection
+capture_points: null # unresolved capture locations
+metrics: null        # unresolved probe metrics
+sample_manifest: null

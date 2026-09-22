@@ -1,0 +1,7 @@
+accelerator: gpu
+devices: null              # must be chosen for the allocation
+num_nodes: null
+precision: null
+distributed_strategy: null # unresolved execution strategy
+num_workers: null
+deterministic: true

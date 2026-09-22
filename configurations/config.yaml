@@ -1,16 +1,28 @@
-# configuration parsing starts here
+# M0 world-model configuration.  This file is intentionally safe to compose and
+# launch locally: the experiment has no tasks until one is selected explicitly.
 defaults:
-  - experiment: example_classification # experiment yaml file name in configurations/experiments folder [fixme]
-  - dataset: example_cifar10 # dataset yaml file name in configurations/dataset folder [fixme]
-  - algorithm: example_classifier # algorithm yaml file name in configurations/algorithm folder [fixme]
-  - cluster: null # optional, cluster yaml file name in configurations/cluster folder. Leave null for local compute
+  - experiment: world_model
+  - algorithm: world_model
+  - model: joint_dit
+  - stage: bidirectional
+  - representation: video_vae
+  - conditioning: camera_prope
+  - dataset: sana_train
+  - rollout: minute
+  - evaluation: subset
+  - probing: "off"
+  - runtime: single_gpu
+  - cluster: null
+  - _self_
 
-debug: false # global debug flag will be passed into configuration of experiment, dataset and algorithm
+debug: false
 
+# Disabled is the credential-free default.  Set mode=online and entity=<entity>
+# explicitly for managed logging.
 wandb:
-  entity: null # wandb account name / organization name [fixme]
-  project: null # wandb project name; if not provided, defaults to root folder name [fixme]
-  mode: online # set wandb logging to online, offline or dryrun
+  entity: null
+  project: tiny-iwm
+  mode: disabled
 
-resume: null # wandb run id to resume logging and loading checkpoint from
-load: null # wanmdb run id containing checkpoint or a path to a checkpoint file 
+resume: null
+load: null

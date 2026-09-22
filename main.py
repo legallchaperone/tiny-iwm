@@ -131,11 +131,11 @@ def run(cfg: DictConfig):
     if "name" not in cfg:
         raise ValueError("must specify a name for the run with command line argument '+name=[name]'")
 
-    if not cfg.wandb.get("entity", None):
+    if cfg.wandb.mode == "online" and not cfg.wandb.get("entity", None):
         raise ValueError(
             "must specify wandb entity in 'configurations/config.yaml' or with command line"
             " argument 'wandb.entity=[entity]' \n An entity is your wandb user name or group"
-            " name. This is used for logging. If you don't have an wandb account, please signup at https://wandb.ai/"
+            " name. This is used for online logging. Use wandb.mode=disabled for local execution."
         )
 
     if cfg.wandb.project is None:

@@ -1,0 +1,12 @@
+objective: flow_matching
+optimizer:
+  name: adamw
+  learning_rate: null  # unresolved scientific choice
+  weight_decay: null   # unresolved scientific choice
+training:
+  batch_size: null            # unresolved; depends on memory profiling
+  gradient_accumulation: null # unresolved; depends on global batch size
+  max_steps: null             # unresolved training budget
+ema:
+  enabled: null
+  decay: null

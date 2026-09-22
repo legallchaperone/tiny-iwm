@@ -1,0 +1,4 @@
+name: bidirectional
+attention_visibility: bidirectional
+teacher_forcing: false
+initial_checkpoint: null

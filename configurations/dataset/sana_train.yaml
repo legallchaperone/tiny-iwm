@@ -1,0 +1,8 @@
+name: sana_wm
+split: train
+manifest: null       # local, versioned manifest path
+data_root: null      # local dataset root
+rgb_frames: 961
+fps: 16
+resolution: null     # unresolved after memory profiling
+validation_manifest: null

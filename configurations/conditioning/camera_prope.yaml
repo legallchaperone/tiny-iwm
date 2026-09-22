@@ -1,0 +1,10 @@
+camera:
+  enabled: true
+  method: tiled_prope
+  pose_convention: null  # unresolved coordinate convention
+  translation_scale: null
+text:
+  enabled: null          # unresolved scientific choice
+  encoder: null
+  dropout: null
+  cfg_scale: null
