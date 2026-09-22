@@ -37,6 +37,7 @@ class SanaCausalVideoVAEAdapter(Representation):
 
     def encode(self, video: torch.Tensor) -> torch.Tensor:
         _validate_video_tensor(video, "video")
+        self._model.eval()
         with torch.no_grad():
             latents = self._model.encode(video)
         _validate_video_tensor(latents, "codec latents")
@@ -47,6 +48,7 @@ class SanaCausalVideoVAEAdapter(Representation):
     def decode(self, normalized_latents: torch.Tensor) -> torch.Tensor:
         _validate_video_tensor(normalized_latents, "normalized latents")
         latents = self._normalizer.denormalize(normalized_latents)
+        self._model.eval()
         with torch.no_grad():
             video = self._model.decode(latents)
         _validate_video_tensor(video, "decoded video")

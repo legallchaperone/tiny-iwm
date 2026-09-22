@@ -74,31 +74,39 @@ class ChannelNormalizer:
         if minimum_std <= 0:
             raise ValueError("minimum_std must be positive")
 
-        channel_sum: torch.Tensor | None = None
-        channel_square_sum: torch.Tensor | None = None
+        channel_mean: torch.Tensor | None = None
+        channel_m2: torch.Tensor | None = None
         sample_count = 0
         value_count = 0
         for batch in batches:
             _validate_latents(batch)
             values = batch.detach().to(device="cpu", dtype=torch.float64)
-            if channel_sum is not None and values.shape[1] != channel_sum.numel():
+            if channel_mean is not None and values.shape[1] != channel_mean.numel():
                 raise ValueError("all normalization batches must have the same channels")
-            reduced_dims = (0, 2, 3, 4)
-            current_sum = values.sum(dim=reduced_dims)
-            current_square_sum = values.square().sum(dim=reduced_dims)
-            channel_sum = current_sum if channel_sum is None else channel_sum + current_sum
-            channel_square_sum = (
-                current_square_sum
-                if channel_square_sum is None
-                else channel_square_sum + current_square_sum
-            )
+            flattened = values.permute(1, 0, 2, 3, 4).reshape(values.shape[1], -1)
+            batch_count = flattened.shape[1]
+            batch_mean = flattened.mean(dim=1)
+            batch_m2 = (flattened - batch_mean[:, None]).square().sum(dim=1)
+            if channel_mean is None:
+                channel_mean = batch_mean
+                channel_m2 = batch_m2
+            else:
+                assert channel_m2 is not None
+                total_count = value_count + batch_count
+                delta = batch_mean - channel_mean
+                channel_mean = channel_mean + delta * (batch_count / total_count)
+                channel_m2 = (
+                    channel_m2
+                    + batch_m2
+                    + delta.square() * (value_count * batch_count / total_count)
+                )
             sample_count += values.shape[0]
-            value_count += values.shape[0] * values.shape[2] * values.shape[3] * values.shape[4]
+            value_count += batch_count
 
-        if channel_sum is None or channel_square_sum is None:
+        if channel_mean is None or channel_m2 is None:
             raise ValueError("at least one training latent batch is required")
-        mean = channel_sum / value_count
-        variance = torch.clamp(channel_square_sum / value_count - mean.square(), min=0.0)
+        mean = channel_mean
+        variance = channel_m2 / value_count
         std = torch.clamp(variance.sqrt(), min=minimum_std)
         stats = NormalizationStats(
             mean=tuple(float(value) for value in mean),

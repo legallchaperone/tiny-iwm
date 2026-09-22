@@ -64,6 +64,17 @@ def test_statistics_are_training_only_frozen_and_reversible():
         )
 
 
+def test_statistics_keep_small_variance_around_a_large_offset():
+    values = torch.tensor([1e8 - 1, 1e8 + 1], dtype=torch.float64).view(2, 1, 1, 1, 1)
+
+    normalizer = ChannelNormalizer.fit_from_training(
+        [values], split="train", data_version="large-offset-v1"
+    )
+
+    assert normalizer.stats.mean == (1e8,)
+    assert normalizer.stats.std == (1.0,)
+
+
 def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
     normalizer = _normalizer()
     codec = _codec(normalizer)
@@ -162,7 +173,9 @@ def test_sana_adapter_freezes_codec_and_round_trips_through_normalization():
     )
     video = torch.tensor([0.5, 1.0, 1.5, 3.0]).view(2, 2, 1, 1, 1)
 
+    model.train()
     normalized = adapter.encode(video)
+    model.train()
     decoded = adapter.decode(normalized)
 
     assert not model.training
@@ -170,3 +183,10 @@ def test_sana_adapter_freezes_codec_and_round_trips_through_normalization():
     assert not normalized.requires_grad
     torch.testing.assert_close(decoded, video)
     assert adapter.spec.as_latent_spec().codec_id.endswith("a" * 64)
+
+
+def test_codec_spec_rejects_normalization_channel_mismatch():
+    normalizer = _normalizer()
+
+    with pytest.raises(ValueError, match="normalization channels"):
+        _codec(normalizer, latent_channels=3)

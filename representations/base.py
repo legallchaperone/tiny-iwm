@@ -38,6 +38,8 @@ class CodecSpec:
             raise ValueError("causal mode must be a boolean")
         if type(self.latent_channels) is not int or self.latent_channels <= 0:
             raise ValueError("latent channels must be a positive integer")
+        if len(self.normalization.mean) != self.latent_channels:
+            raise ValueError("normalization channels must match latent_channels")
         if type(self.temporal_compression) is not int or self.temporal_compression <= 0:
             raise ValueError("temporal compression must be a positive integer")
         if len(self.spatial_compression) != 2 or any(
