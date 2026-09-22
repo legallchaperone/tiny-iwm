@@ -69,6 +69,7 @@ class CodecSpec:
             },
             causal=self.causal,
             encoding_policy=self.encoding_policy,
+            execution_dtype=self.execution_dtype,
         )
 
 

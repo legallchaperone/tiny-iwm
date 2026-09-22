@@ -85,6 +85,7 @@ class LatentSpec:
     normalization: Mapping[str, Any]
     causal: bool
     encoding_policy: str
+    execution_dtype: str
 
     def __post_init__(self) -> None:
         if self.channels <= 0 or self.temporal_compression <= 0:
@@ -93,8 +94,12 @@ class LatentSpec:
             value <= 0 for value in self.spatial_compression
         ):
             raise ValueError("spatial_compression must contain two positive values")
-        if not self.codec_id or not self.encoding_policy:
-            raise ValueError("codec_id and encoding_policy must be explicit")
+        if not self.codec_id or not self.encoding_policy or not self.execution_dtype:
+            raise ValueError(
+                "codec_id, encoding_policy, and execution_dtype must be explicit"
+            )
+        if self.execution_dtype not in {"float16", "bfloat16", "float32", "float64"}:
+            raise ValueError("execution_dtype must name a supported floating dtype")
 
 
 @dataclass(frozen=True)

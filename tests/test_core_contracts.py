@@ -57,6 +57,7 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
         normalization={"kind": "channel_stats", "version": "v1"},
         causal=True,
         encoding_policy="prefix_causal",
+        execution_dtype="float32",
     )
     camera = CameraCondition(
         c2w="[B,T,4,4]",
@@ -73,6 +74,7 @@ def test_initial_contracts_make_identity_and_conventions_explicit():
     )
 
     assert latent_spec.encoding_policy == "prefix_causal"
+    assert latent_spec.execution_dtype == "float32"
     assert camera.extrinsics_convention == "camera_to_world"
     assert batch.sample_ids == ("scene-1",)
 

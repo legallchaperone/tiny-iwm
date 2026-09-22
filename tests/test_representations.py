@@ -221,6 +221,7 @@ def test_sana_adapter_freezes_codec_and_round_trips_through_normalization():
     assert not normalized.requires_grad
     torch.testing.assert_close(decoded, video)
     assert adapter.spec.as_latent_spec().codec_id.endswith("a" * 64)
+    assert adapter.spec.as_latent_spec().execution_dtype == "float32"
 
 
 def test_sana_adapter_snapshots_injected_normalizer():
