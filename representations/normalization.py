@@ -23,6 +23,8 @@ class NormalizationStats:
     training_split: str = "train"
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "mean", tuple(self.mean))
+        object.__setattr__(self, "std", tuple(self.std))
         if self.training_split != "train":
             raise ValueError("normalization statistics must come from the train split")
         if not self.training_data_version:

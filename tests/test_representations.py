@@ -8,6 +8,7 @@ from representations import (
     CacheIdentity,
     ChannelNormalizer,
     CodecSpec,
+    NormalizationStats,
     SanaCausalVideoVAEAdapter,
 )
 
@@ -100,6 +101,34 @@ def test_cache_identity_is_stable_across_mapping_insertion_order():
     preprocessing["resize"][0] = 999
     assert first.key == second.key
     assert str(first.relative_path) == f"{first.key[:2]}/{first.key}.pt"
+
+
+def test_cache_identity_snapshots_yaml_backed_sequences():
+    means = [2.0, 4.0]
+    stds = [1.0, 2.0]
+    spatial_compression = [8, 8]
+    frames = [0, 1, 2]
+    stats = NormalizationStats(
+        mean=means,
+        std=stds,
+        training_data_version="sana-train-v1",
+        sample_count=2,
+        value_count_per_channel=2,
+    )
+    codec = _codec(
+        ChannelNormalizer(stats),
+        spatial_compression=spatial_compression,
+        normalization=stats,
+    )
+    identity = _identity(codec, frame_indices=frames)
+    original_key = identity.key
+
+    means[0] = 999.0
+    stds[0] = 999.0
+    spatial_compression[0] = 999
+    frames[0] = 999
+
+    assert identity.key == original_key
 
 
 class _OfficialCodecStub(nn.Module):

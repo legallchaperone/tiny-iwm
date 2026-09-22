@@ -27,7 +27,9 @@ class CodecSpec:
     normalization: NormalizationStats
 
     def __post_init__(self) -> None:
-        digest = self.weights_sha256
+        object.__setattr__(self, "spatial_compression", tuple(self.spatial_compression))
+        digest = self.weights_sha256.lower()
+        object.__setattr__(self, "weights_sha256", digest)
         if len(digest) != 64 or any(character not in hexdigits for character in digest):
             raise ValueError("weights_sha256 must be a 64-character SHA-256 digest")
         if not self.codec_name or not self.encoding_policy:

@@ -22,6 +22,7 @@ class CacheIdentity:
     codec: CodecSpec
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "frame_indices", tuple(self.frame_indices))
         if not self.data_version or not self.sample_id:
             raise ValueError("data version and sample ID must be explicit")
         if not self.frame_indices or any(
