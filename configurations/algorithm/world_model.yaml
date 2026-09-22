@@ -1,4 +1,10 @@
 objective: flow_matching
+flow:
+  convention: native_linear_t0_clean_t1_noise
+  time_distribution: uniform
+  time_min: 0.0
+  time_max: 1.0
+  loss_weighting: uniform
 optimizer:
   name: adamw
   learning_rate: null  # unresolved scientific choice
