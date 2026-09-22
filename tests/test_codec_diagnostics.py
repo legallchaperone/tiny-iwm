@@ -157,6 +157,12 @@ def test_gate_rejects_camera_timestamps_not_aligned_to_16_fps():
         )
 
 
+@pytest.mark.parametrize("atol", [float("nan"), float("inf"), -1.0])
+def test_gate_settings_reject_nonfinite_or_negative_causality_tolerance(atol):
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        CodecGateSettings(causality_atol=atol)
+
+
 def test_manifest_runner_writes_structured_reader_failures(tmp_path):
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from math import log10
+from math import isfinite, log10
 from typing import Any, Mapping
 
 import numpy as np
@@ -31,8 +31,8 @@ class CodecGateSettings:
             raise ValueError("rgb_frame_count must be greater than one")
         if not 0 < self.future_start_rgb < self.rgb_frame_count:
             raise ValueError("future_start_rgb must be inside the sample")
-        if self.causality_atol < 0:
-            raise ValueError("causality_atol must be non-negative")
+        if not isfinite(self.causality_atol) or self.causality_atol < 0:
+            raise ValueError("causality_atol must be finite and non-negative")
 
 
 def validate_complete_sample(
