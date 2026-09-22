@@ -132,6 +132,15 @@ def test_unparsable_remote_authority_is_sanitized_as_opaque_text():
     assert "secret" not in sanitized
 
 
+def test_query_value_with_slash_never_becomes_a_remote_path():
+    remote = "https://host?access_token=/top-secret"
+
+    sanitized = provenance_module._sanitize_remote_url(remote)
+
+    assert sanitized == "https://host"
+    assert "top-secret" not in sanitized
+
+
 def test_temporary_record_is_removed_when_write_fails(tmp_path, monkeypatch):
     original_factory = provenance_module.tempfile.NamedTemporaryFile
     temporary_paths = []
