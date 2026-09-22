@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 import torch
+from omegaconf import OmegaConf
 from torch import nn
 
 from representations import (
@@ -129,6 +130,16 @@ def test_cache_identity_snapshots_yaml_backed_sequences():
     frames[0] = 999
 
     assert identity.key == original_key
+
+
+def test_cache_identity_accepts_composed_hydra_preprocessing():
+    preprocessing = OmegaConf.create(
+        {"resize": [320, 512], "crop": [0, 0, 320, 512]}
+    )
+
+    identity = _identity(_codec(_normalizer()), preprocessing=preprocessing)
+
+    assert len(identity.key) == 64
 
 
 class _OfficialCodecStub(nn.Module):

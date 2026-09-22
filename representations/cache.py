@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 import json
 from math import isfinite
 from pathlib import PurePosixPath
 from types import MappingProxyType
-from typing import Mapping, Tuple
+from typing import Tuple
 
 from representations.base import CodecSpec
 
@@ -87,7 +88,7 @@ def _canonical_json_value(value: object) -> object:
         if not isfinite(value):
             raise ValueError("cache identity cannot contain non-finite floats")
         return value
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [_canonical_json_value(item) for item in value]
     if isinstance(value, Mapping):
         if not all(isinstance(key, str) for key in value):
