@@ -118,7 +118,10 @@ def test_rollout_result_snapshots_and_freezes_identity_mappings():
     with pytest.raises(TypeError):
         alias |= {"new": "value"}
     assert "new" not in result.conditions
-    assert result.conditions["tags"] == (3, "a", "z")
+    assert result.conditions["tags"] == {
+        "__tiny_iwm_container__": "set",
+        "items": (3, "a", "z"),
+    }
 
     restored = pickle.loads(pickle.dumps(result))
     serialized = asdict(result)
@@ -135,6 +138,17 @@ def test_rollout_result_snapshots_and_freezes_identity_mappings():
         inference_settings={"steps": 8},
     )
     assert reordered.conditions == result.conditions
+
+    ordered = RolloutResult(
+        output_files=("sample.mp4",),
+        latent_files=("sample.pt",),
+        checkpoint_id="checkpoint-1",
+        seed=7,
+        conditions={"tags": [3, "a", "z"], "camera": {"angles": [1.0, 2.0]}},
+        inference_settings={"steps": 8},
+    )
+    assert ordered.conditions != result.conditions
+    assert json.dumps(ordered.conditions) != json.dumps(result.conditions)
 
 
 def test_probe_event_carries_complete_run_and_position_identity():

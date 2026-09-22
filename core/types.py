@@ -42,7 +42,12 @@ def _freeze_value(value: Any) -> Any:
         return tuple(_freeze_value(child) for child in value)
     if isinstance(value, (set, frozenset)):
         frozen = (_freeze_value(child) for child in value)
-        return tuple(sorted(frozen, key=_canonical_sort_key))
+        return _FrozenDict(
+            {
+                "__tiny_iwm_container__": "set",
+                "items": tuple(sorted(frozen, key=_canonical_sort_key)),
+            }
+        )
     return value
 
 
