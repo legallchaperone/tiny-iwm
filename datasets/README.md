@@ -8,6 +8,15 @@ or metadata files raise `SampleReadError`; training code should record that
 failure and exclude the sample rather than inventing camera values. Image
 resize/crop must call the paired transforms so RGB-pixel intrinsics stay aligned.
 
+Run the complete M1 gate with `python -m scripts.validate_m1_codec`. It accepts a
+local manifest/data root and a zero-argument codec factory in
+`package.module:callable` form. The JSON report includes exact first/last layout
+mappings, camera timestamp alignment, held-out reconstruction and latent
+statistics, a future-frame causality perturbation, the canonical cache key, and
+a structured failure list. A passing report requires every selected validation
+or test sample to pass; it never substitutes synthetic camera data or a fallback
+codec.
+
 Create a folder to create your own pytorch dataset definition. Then, update the `__init__.py`
 at every level to register all datasets.
 
