@@ -79,9 +79,9 @@ class Manifest:
     records: Tuple[ManifestRecord, ...]
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1:
+        if type(self.schema_version) is not int or self.schema_version != 1:
             raise ValueError(f"unsupported manifest schema_version {self.schema_version}")
-        if not self.data_version:
+        if not isinstance(self.data_version, str) or not self.data_version.strip():
             raise ValueError("manifest data_version must be non-empty")
         if not self.records:
             raise ValueError("manifest must contain at least one record")
@@ -121,6 +121,8 @@ def load_manifest(path: str | Path) -> Manifest:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise ValueError(f"manifest does not exist: {manifest_path}") from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"manifest cannot be read: {manifest_path}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(f"manifest is not valid JSON: {manifest_path}: {exc}") from exc
     if not isinstance(payload, dict):

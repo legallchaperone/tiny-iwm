@@ -67,19 +67,27 @@ class SANAReader:
 
     def _read_video(self, record: ManifestRecord) -> np.ndarray:
         path = self._path(record, "video", record.video_path)
-        capture = cv2.VideoCapture(str(path))
+        capture = None
         frames: list[np.ndarray] = []
         try:
+            capture = cv2.VideoCapture(str(path))
+            if not capture.isOpened():
+                raise SampleReadError(record.sample_id, "video", "cannot open video")
             while True:
                 ok, frame = capture.read()
                 if not ok:
                     break
                 frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            if not frames:
+                raise SampleReadError(record.sample_id, "video", "no decodable frames")
+            return np.stack(frames)
+        except SampleReadError:
+            raise
+        except (cv2.error, ValueError, OSError) as exc:
+            raise SampleReadError(record.sample_id, "video", f"decoding failed: {exc}") from exc
         finally:
-            capture.release()
-        if not frames:
-            raise SampleReadError(record.sample_id, "video", "no decodable frames")
-        return np.stack(frames)
+            if capture is not None:
+                capture.release()
 
     def _read_camera(self, record: ManifestRecord) -> CameraData:
         path = self._path(record, "camera", record.camera_path)

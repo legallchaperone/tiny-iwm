@@ -38,6 +38,12 @@ def test_source_scene_cannot_cross_train_validation_split():
         Manifest(1, "data-v1", (_record(), _record(sample_id="clip-b", split="validation")))
 
 
+@pytest.mark.parametrize("schema_version", [True, 1.0, "1"])
+def test_manifest_requires_exact_integer_schema_version(schema_version):
+    with pytest.raises(ValueError, match="unsupported manifest schema_version"):
+        Manifest(schema_version, "data-v1", (_record(),))
+
+
 def test_resize_crop_updates_focal_length_and_principal_point():
     intrinsics = np.array([[[100.0, 4.0, 50.0], [2.0, 80.0, 40.0], [0.0, 0.0, 1.0]]])
 
@@ -142,3 +148,34 @@ def test_manifest_import_does_not_load_opencv_in_fresh_interpreter():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_inconsistent_video_frames_become_sample_failure(tmp_path, monkeypatch):
+    record = _record()
+    video_path = tmp_path / record.video_path
+    video_path.parent.mkdir()
+    video_path.write_bytes(b"fake")
+
+    class FakeCapture:
+        def __init__(self):
+            self.frames = [
+                np.zeros((2, 2, 3), dtype=np.uint8),
+                np.zeros((3, 2, 3), dtype=np.uint8),
+            ]
+
+        def isOpened(self):
+            return True
+
+        def read(self):
+            if not self.frames:
+                return False, None
+            return True, self.frames.pop(0)
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr("datasets.sana_wm.reader.cv2.VideoCapture", lambda _path: FakeCapture())
+    monkeypatch.setattr("datasets.sana_wm.reader.cv2.cvtColor", lambda frame, _code: frame)
+
+    with pytest.raises(SampleReadError, match="video error: decoding failed"):
+        SANAReader(tmp_path)._read_video(record)
