@@ -4,6 +4,7 @@ import yaml
 
 
 REGISTRY = Path(__file__).parents[1] / "third_party" / "UPSTREAMS.yaml"
+REPOSITORY_ROOT = REGISTRY.parents[1]
 
 
 def test_upstream_registry_has_complete_pinned_records():
@@ -38,3 +39,24 @@ def test_missing_license_prevents_source_reuse():
         else:
             assert source["reuse_kind"] == "reference-only"
             assert "do not copy" in source["adaptation_notes"].lower()
+
+
+def test_existing_template_scaffold_has_per_file_source_and_verification():
+    source = yaml.safe_load(REGISTRY.read_text())["sources"]["research-template"]
+    mappings = source["existing_local_mappings"]
+    by_path = {mapping["local_path"]: mapping for mapping in mappings}
+
+    assert len(mappings) == 73
+    assert len(by_path) == len(mappings)
+    assert by_path["utils/wandb_utils.py"]["upstream_path"] == "utils/wandb_utils.py"
+    assert by_path["algorithms/examples/classifier/classifier.py"]["reuse_kind"] == "vendored"
+    assert by_path["README.md"]["reuse_kind"] == "adapted"
+
+    for local_path, mapping in by_path.items():
+        assert (REPOSITORY_ROOT / local_path).exists()
+        assert mapping["upstream_path"] == local_path
+        assert mapping["reuse_kind"] in {"vendored", "adapted"}
+        verification = mapping["verification"]
+        assert verification["method"] == "tree-match-verified-in-CWX-5"
+        assert len(verification["imported_local_commit"]) == 40
+        assert verification["upstream_commit"] == source["commit"]
