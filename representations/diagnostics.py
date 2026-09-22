@@ -25,8 +25,8 @@ class CodecGateSettings:
     causality_atol: float = 0.0
 
     def __post_init__(self) -> None:
-        if self.fps <= 0:
-            raise ValueError("fps must be positive")
+        if not isfinite(self.fps) or self.fps <= 0:
+            raise ValueError("fps must be finite and positive")
         if self.rgb_frame_count <= 1:
             raise ValueError("rgb_frame_count must be greater than one")
         if not 0 < self.future_start_rgb < self.rgb_frame_count:

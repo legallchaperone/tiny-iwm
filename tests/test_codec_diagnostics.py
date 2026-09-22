@@ -295,6 +295,12 @@ def test_gate_settings_reject_nonfinite_or_negative_causality_tolerance(atol):
         CodecGateSettings(causality_atol=atol)
 
 
+@pytest.mark.parametrize("fps", [float("nan"), float("inf"), 0.0, -1.0])
+def test_gate_settings_reject_nonfinite_or_nonpositive_fps(fps):
+    with pytest.raises(ValueError, match="finite and positive"):
+        CodecGateSettings(fps=fps)
+
+
 def test_manifest_runner_writes_structured_reader_failures(tmp_path):
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(
