@@ -311,6 +311,19 @@ def test_sana_adapter_rejects_execution_dtype_mismatch():
         )
 
 
+def test_sana_adapter_rejects_mixed_dtype_codec_state():
+    normalizer = _normalizer()
+    model = _OfficialCodecStub()
+    model.register_buffer("reduced_precision_state", torch.ones(1).half())
+
+    with pytest.raises(ValueError, match="one execution dtype"):
+        SanaCausalVideoVAEAdapter(
+            model,
+            spec=_codec(normalizer),
+            normalizer=normalizer,
+        )
+
+
 def test_sana_adapter_disables_ambient_autocast_for_codec_calls():
     normalizer = _normalizer()
     adapter = SanaCausalVideoVAEAdapter(

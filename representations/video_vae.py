@@ -30,7 +30,7 @@ class SanaCausalVideoVAEAdapter(Representation):
             raise ValueError("normalizer statistics must match the codec specification")
         self._model = deepcopy(model).eval()
         self._model.requires_grad_(False)
-        self._codec_dtype = _floating_model_dtype(self._model)
+        self._codec_dtype = _uniform_floating_model_dtype(self._model)
         if self._codec_dtype is None:
             raise ValueError("codec must have a floating-point parameter or buffer")
         if _dtype_name(self._codec_dtype) != spec.execution_dtype:
@@ -78,11 +78,15 @@ def _validate_video_tensor(value: object, name: str) -> None:
         raise ValueError(f"{name} must contain finite floating-point values")
 
 
-def _floating_model_dtype(model: nn.Module) -> torch.dtype | None:
-    for value in (*model.parameters(), *model.buffers()):
-        if torch.is_floating_point(value):
-            return value.dtype
-    return None
+def _uniform_floating_model_dtype(model: nn.Module) -> torch.dtype | None:
+    dtypes = {
+        value.dtype
+        for value in (*model.parameters(), *model.buffers())
+        if torch.is_floating_point(value)
+    }
+    if len(dtypes) > 1:
+        raise ValueError("codec floating-point state must use one execution dtype")
+    return next(iter(dtypes), None)
 
 
 def _dtype_name(dtype: torch.dtype) -> str:
