@@ -24,6 +24,7 @@ class CodecSpec:
     spatial_compression: Tuple[int, int]
     causal: bool
     encoding_policy: str
+    execution_dtype: str
     normalization: NormalizationStats
 
     def __post_init__(self) -> None:
@@ -32,8 +33,12 @@ class CodecSpec:
         object.__setattr__(self, "weights_sha256", digest)
         if len(digest) != 64 or any(character not in hexdigits for character in digest):
             raise ValueError("weights_sha256 must be a 64-character SHA-256 digest")
-        if not self.codec_name or not self.encoding_policy:
-            raise ValueError("codec name and encoding policy must be explicit")
+        if not self.codec_name or not self.encoding_policy or not self.execution_dtype:
+            raise ValueError(
+                "codec name, encoding policy, and execution dtype must be explicit"
+            )
+        if self.execution_dtype not in {"float16", "bfloat16", "float32", "float64"}:
+            raise ValueError("execution_dtype must name a supported floating dtype")
         if type(self.causal) is not bool:
             raise ValueError("causal mode must be a boolean")
         if type(self.latent_channels) is not int or self.latent_channels <= 0:

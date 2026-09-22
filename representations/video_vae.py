@@ -31,6 +31,10 @@ class SanaCausalVideoVAEAdapter(Representation):
         self._model = deepcopy(model).eval()
         self._model.requires_grad_(False)
         self._codec_dtype = _floating_model_dtype(self._model)
+        if self._codec_dtype is None:
+            raise ValueError("codec must have a floating-point parameter or buffer")
+        if _dtype_name(self._codec_dtype) != spec.execution_dtype:
+            raise ValueError("codec execution dtype must match its specification")
         self._spec = spec
         self._normalizer = ChannelNormalizer(spec.normalization)
 
@@ -73,3 +77,7 @@ def _floating_model_dtype(model: nn.Module) -> torch.dtype | None:
         if torch.is_floating_point(value):
             return value.dtype
     return None
+
+
+def _dtype_name(dtype: torch.dtype) -> str:
+    return str(dtype).removeprefix("torch.")

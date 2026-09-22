@@ -30,6 +30,7 @@ def _codec(normalizer: ChannelNormalizer, **changes) -> CodecSpec:
         spatial_compression=(8, 8),
         causal=True,
         encoding_policy="prefix_causal_v1",
+        execution_dtype="float32",
         normalization=normalizer.stats,
     )
     return replace(spec, **changes)
@@ -98,6 +99,7 @@ def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
     baseline = _identity(codec)
 
     changed_codec = _identity(replace(codec, weights_sha256="b" * 64))
+    changed_precision = _identity(replace(codec, execution_dtype="float16"))
     changed_preprocessing = _identity(
         codec, preprocessing={"resize": [256, 512], "crop": [0, 0, 256, 512]}
     )
@@ -112,12 +114,14 @@ def test_cache_identity_separates_codec_preprocessing_frames_and_statistics():
         {
             baseline.key,
             changed_codec.key,
+            changed_precision.key,
             changed_preprocessing.key,
             changed_frames.key,
             changed_statistics.key,
         }
-    ) == 5
+    ) == 6
     assert baseline.payload["codec"]["encoding_policy"] == "prefix_causal_v1"
+    assert baseline.payload["codec"]["execution_dtype"] == "float32"
     assert baseline.payload["normalization"]["training_split"] == "train"
 
 
@@ -234,7 +238,9 @@ def test_sana_adapter_snapshots_injected_codec_state():
 def test_sana_adapter_restores_reduced_codec_dtype_before_decode():
     normalizer = _normalizer()
     adapter = SanaCausalVideoVAEAdapter(
-        _OfficialCodecStub().half(), spec=_codec(normalizer), normalizer=normalizer
+        _OfficialCodecStub().half(),
+        spec=_codec(normalizer, execution_dtype="float16"),
+        normalizer=normalizer,
     )
     video = torch.tensor([0.5, 1.0, 1.5, 3.0], dtype=torch.float16).view(
         2, 2, 1, 1, 1
@@ -259,7 +265,9 @@ def test_sana_adapter_rejects_overflow_when_restoring_codec_dtype():
     normalizer = ChannelNormalizer(stats)
     adapter = SanaCausalVideoVAEAdapter(
         _OfficialCodecStub().half(),
-        spec=_codec(normalizer, normalization=stats),
+        spec=_codec(
+            normalizer, normalization=stats, execution_dtype="float16"
+        ),
         normalizer=normalizer,
     )
     normalized = torch.full((1, 2, 1, 1, 1), 40_000.0)
@@ -273,3 +281,14 @@ def test_codec_spec_rejects_normalization_channel_mismatch():
 
     with pytest.raises(ValueError, match="normalization channels"):
         _codec(normalizer, latent_channels=3)
+
+
+def test_sana_adapter_rejects_execution_dtype_mismatch():
+    normalizer = _normalizer()
+
+    with pytest.raises(ValueError, match="execution dtype"):
+        SanaCausalVideoVAEAdapter(
+            _OfficialCodecStub().half(),
+            spec=_codec(normalizer),
+            normalizer=normalizer,
+        )
