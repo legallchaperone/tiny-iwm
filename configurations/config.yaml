@@ -26,3 +26,9 @@ wandb:
 
 resume: null
 load: null
+
+# World-model checkpoint semantics. Cross-stage initialization and same-run
+# recovery are intentionally separate and mutually exclusive.
+checkpoint:
+  init_from: null
+  resume_from: null

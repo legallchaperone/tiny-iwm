@@ -11,6 +11,16 @@ implicit guess. W&B is disabled by default, so composing and launching this
 baseline locally requires no credentials. Example configurations remain
 available through explicit Hydra overrides.
 
+Run the M0 contract check on CPU without loading data or model weights:
+
+```bash
+python -m scripts.preflight --output-dir outputs/preflight +name=m0-preflight runtime.accelerator=cpu
+```
+
+The command validates random DiT initialization and mutually exclusive
+`checkpoint.init_from` / `checkpoint.resume_from` settings, then writes
+`resolved_config.yaml` and `provenance.json` with W&B disabled by default.
+
 All configurations are automatically saved in wandb run.
 
 ---

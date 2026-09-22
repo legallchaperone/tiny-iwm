@@ -32,3 +32,6 @@ jobs:
 
       - name: Run tests
         run: python -m pytest
+
+      - name: Run M0 preflight smoke test
+        run: python -m scripts.preflight --output-dir "$RUNNER_TEMP/tiny-iwm-preflight" +name=ci-preflight runtime.accelerator=cpu
