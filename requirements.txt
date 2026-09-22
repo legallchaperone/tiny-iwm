@@ -1,4 +1,5 @@
 torch
+numpy
 torchvision
 wandb
 hydra-core
@@ -6,7 +7,7 @@ pyyaml
 omegaconf
 colorama
 tqdm
-opencv-python
+opencv-python-headless
 matplotlib
 lightning
 click

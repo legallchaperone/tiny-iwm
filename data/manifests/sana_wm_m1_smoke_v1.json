@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "data_version": "sana-wm-m1-smoke-v1",
+  "records": [
+    {
+      "sample_id": "sana-smoke-train-000",
+      "source": "sana-wm",
+      "scene_id": "smoke-scene-train-000",
+      "split": "train",
+      "data_version": "sana-wm-m1-smoke-v1",
+      "video_path": "videos/sana-smoke-train-000.mp4",
+      "camera_path": "camera/sana-smoke-train-000.json",
+      "metadata_path": "metadata/sana-smoke-train-000.json"
+    },
+    {
+      "sample_id": "sana-smoke-validation-000",
+      "source": "sana-wm",
+      "scene_id": "smoke-scene-validation-000",
+      "split": "validation",
+      "data_version": "sana-wm-m1-smoke-v1",
+      "video_path": "videos/sana-smoke-validation-000.mp4",
+      "camera_path": "camera/sana-smoke-validation-000.json",
+      "metadata_path": "metadata/sana-smoke-validation-000.json"
+    }
+  ]
+}
