@@ -18,7 +18,9 @@ def test_default_configuration_composes():
     assert cfg.dataset.rgb_frames == 961
     assert cfg.experiment.tasks == []
     assert cfg.wandb.mode == "disabled"
-    assert cfg.algorithm.training.batch_size is None
+    assert cfg.algorithm.training.batch_size == 1
+    assert cfg.algorithm.training.gradient_accumulation == 1
+    assert cfg.algorithm.ema.enabled is True
     assert cfg.rollout.history_policy == "full"
 
 
