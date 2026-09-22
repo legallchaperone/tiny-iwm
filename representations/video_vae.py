@@ -44,9 +44,13 @@ class SanaCausalVideoVAEAdapter(Representation):
 
     def encode(self, video: torch.Tensor) -> torch.Tensor:
         _validate_video_tensor(video, "video")
+        codec_video = video.to(dtype=self._codec_dtype)
+        _validate_video_tensor(codec_video, "codec video")
         self._model.eval()
-        with torch.no_grad():
-            latents = self._model.encode(video)
+        with torch.no_grad(), torch.autocast(
+            device_type=codec_video.device.type, enabled=False
+        ):
+            latents = self._model.encode(codec_video)
         _validate_video_tensor(latents, "codec latents")
         if latents.shape[1] != self.spec.latent_channels:
             raise ValueError("codec output channels do not match its specification")
@@ -59,7 +63,9 @@ class SanaCausalVideoVAEAdapter(Representation):
             latents = latents.to(dtype=self._codec_dtype)
         _validate_video_tensor(latents, "codec latents")
         self._model.eval()
-        with torch.no_grad():
+        with torch.no_grad(), torch.autocast(
+            device_type=latents.device.type, enabled=False
+        ):
             video = self._model.decode(latents)
         _validate_video_tensor(video, "decoded video")
         return video

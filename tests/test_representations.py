@@ -187,6 +187,22 @@ class _OfficialCodecStub(nn.Module):
         return latents / self.scale
 
 
+class _AutocastSensitiveCodecStub(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.projection = nn.Conv3d(2, 2, kernel_size=1, bias=False)
+
+    def encode(self, video: torch.Tensor) -> torch.Tensor:
+        encoded = self.projection(video)
+        self.last_encode_dtype = encoded.dtype
+        return encoded
+
+    def decode(self, latents: torch.Tensor) -> torch.Tensor:
+        decoded = self.projection(latents)
+        self.last_decode_dtype = decoded.dtype
+        return decoded
+
+
 def test_sana_adapter_freezes_codec_and_round_trips_through_normalization():
     normalizer = _normalizer()
     model = _OfficialCodecStub()
@@ -292,3 +308,20 @@ def test_sana_adapter_rejects_execution_dtype_mismatch():
             spec=_codec(normalizer),
             normalizer=normalizer,
         )
+
+
+def test_sana_adapter_disables_ambient_autocast_for_codec_calls():
+    normalizer = _normalizer()
+    adapter = SanaCausalVideoVAEAdapter(
+        _AutocastSensitiveCodecStub(),
+        spec=_codec(normalizer),
+        normalizer=normalizer,
+    )
+    video = torch.ones((1, 2, 1, 1, 1))
+
+    with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+        normalized = adapter.encode(video)
+        adapter.decode(normalized)
+
+    assert adapter._model.last_encode_dtype == torch.float32
+    assert adapter._model.last_decode_dtype == torch.float32
