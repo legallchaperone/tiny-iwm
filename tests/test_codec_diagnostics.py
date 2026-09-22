@@ -16,8 +16,9 @@ from scripts.validate_m1_codec import run_gate
 class CausalFixtureCodec(Representation):
     """Small exact-shape codec used to exercise the gate, not a SANA fallback."""
 
-    def __init__(self, *, leak_future: bool = False) -> None:
+    def __init__(self, *, leak_future: bool = False, bad_shape: str | None = None) -> None:
         self.leak_future = leak_future
+        self.bad_shape = bad_shape
         self._spec = CodecSpec(
             codec_name="test-only-causal-fixture",
             weights_sha256="d" * 64,
@@ -51,6 +52,10 @@ class CausalFixtureCodec(Representation):
         latents = torch.cat((first, grouped), dim=2)
         if self.leak_future:
             latents = latents + video[:, :, -1:].mean(dim=(2, 3, 4), keepdim=True)
+        if self.bad_shape == "batch":
+            latents = torch.cat((latents, latents), dim=0)
+        elif self.bad_shape == "channels":
+            latents = latents[:, :2]
         return latents
 
     def decode(self, normalized_latents: torch.Tensor) -> torch.Tensor:
@@ -134,6 +139,20 @@ def test_gate_rejects_a_codec_that_leaks_future_rgb_into_history_latents():
         validate_complete_sample(
             _sample(),
             codec=CausalFixtureCodec(leak_future=True),
+            layout=_layout(),
+            preprocessing={"color_space": "RGB"},
+        )
+
+
+@pytest.mark.parametrize(
+    ("bad_shape", "message"),
+    [("batch", "batch size"), ("channels", "latent channels")],
+)
+def test_gate_rejects_latents_incompatible_with_codec_identity(bad_shape, message):
+    with pytest.raises(ValueError, match=message):
+        validate_complete_sample(
+            _sample(),
+            codec=CausalFixtureCodec(bad_shape=bad_shape),
             layout=_layout(),
             preprocessing={"color_space": "RGB"},
         )

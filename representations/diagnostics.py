@@ -60,6 +60,10 @@ def validate_complete_sample(
 
     latents = codec.encode(video)
     _validate_finite_tensor(latents, "codec latents")
+    if latents.shape[0] != video.shape[0]:
+        raise ValueError("codec latent batch size does not match its input")
+    if latents.shape[1] != codec.spec.latent_channels:
+        raise ValueError("codec latent channels do not match its specification")
     if latents.shape[2] != layout.latent_frame_count:
         raise ValueError(
             "codec latent length does not match VideoLayout: "
