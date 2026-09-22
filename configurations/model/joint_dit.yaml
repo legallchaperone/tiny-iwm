@@ -1,8 +1,11 @@
 architecture: joint_spatiotemporal_dit
 initialization: random
 target_parameters: 300000000
-depth: null       # unresolved scientific choice
-hidden_size: null # unresolved scientific choice
-num_heads: null   # unresolved scientific choice
-patch_size: null  # unresolved scientific choice
+latent_channels: 128
+depth: 24
+hidden_size: 832
+num_heads: 16
+patch_size: [1, 2, 2]
+mlp_ratio: 4.0
+qkv_bias: true
 attention: joint_spatiotemporal_softmax
