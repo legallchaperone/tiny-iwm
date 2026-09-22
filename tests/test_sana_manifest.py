@@ -179,3 +179,31 @@ def test_inconsistent_video_frames_become_sample_failure(tmp_path, monkeypatch):
 
     with pytest.raises(SampleReadError, match="video error: decoding failed"):
         SANAReader(tmp_path)._read_video(record)
+
+
+def test_path_resolution_failure_becomes_sample_failure(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    reader = SANAReader(tmp_path)
+    record = _record()
+
+    def fail_resolve(_path):
+        raise RuntimeError("symlink loop")
+
+    monkeypatch.setattr(Path, "resolve", fail_resolve)
+    with pytest.raises(SampleReadError, match="camera error: cannot resolve path"):
+        reader._path(record, "camera", record.camera_path)
+
+
+@pytest.mark.parametrize("output_size", [(0, 8), (8, 0), (-1, 8), (8, -1)])
+def test_frame_transform_rejects_nonpositive_output_size(output_size):
+    from datasets.sana_wm.transforms import resize_crop_frames
+
+    frames = np.zeros((1, 4, 4, 3), dtype=np.uint8)
+    with pytest.raises(ValueError, match="image sizes must be positive"):
+        resize_crop_frames(
+            frames,
+            resized_size=(8, 8),
+            crop_top_left=(0, 0),
+            output_size=output_size,
+        )

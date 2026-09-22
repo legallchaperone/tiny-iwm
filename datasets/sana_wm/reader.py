@@ -58,7 +58,12 @@ class SANAReader:
         return SANASample(record, frames, camera, metadata)
 
     def _path(self, record: ManifestRecord, component: str, relative: str) -> Path:
-        path = (self.data_root / relative).resolve()
+        try:
+            path = (self.data_root / relative).resolve()
+        except (OSError, RuntimeError) as exc:
+            raise SampleReadError(
+                record.sample_id, component, f"cannot resolve path {relative!r}: {exc}"
+            ) from exc
         if self.data_root not in path.parents:
             raise SampleReadError(record.sample_id, component, "path escapes data_root")
         if not path.is_file():

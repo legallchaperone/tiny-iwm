@@ -58,6 +58,8 @@ def resize_crop_frames(
     resized_h, resized_w = resized_size
     output_h, output_w = output_size
     top, left = crop_top_left
+    if min(resized_h, resized_w, output_h, output_w) <= 0:
+        raise ValueError("image sizes must be positive")
     if top < 0 or left < 0 or top + output_h > resized_h or left + output_w > resized_w:
         raise ValueError("crop lies outside the resized image")
     resized = np.stack(
