@@ -39,6 +39,8 @@ class _FrozenDict(dict):
 def _freeze_value(value: Any) -> Any:
     """Snapshot common mutable containers without copying tensor-like leaves."""
 
+    if isinstance(value, _FrozenDict):
+        return value
     if isinstance(value, Mapping):
         frozen_items = tuple(
             sorted(

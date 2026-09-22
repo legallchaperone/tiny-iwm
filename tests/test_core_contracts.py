@@ -1,6 +1,6 @@
 import json
 import pickle
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -179,6 +179,10 @@ def test_rollout_result_snapshots_and_freezes_identity_mappings():
     assert json.dumps(reordered_marker_mapping.conditions) == json.dumps(
         marker_shaped_mapping.conditions
     )
+
+    reconstructed = replace(result)
+    assert reconstructed == result
+    assert json.dumps(reconstructed.conditions) == json.dumps(result.conditions)
 
 
 def test_probe_event_carries_complete_run_and_position_identity():
