@@ -38,6 +38,12 @@ def test_source_scene_cannot_cross_train_validation_split():
         Manifest(1, "data-v1", (_record(), _record(sample_id="clip-b", split="validation")))
 
 
+@pytest.mark.parametrize("split", [[], {}, 1, None])
+def test_manifest_rejects_non_string_split_with_validation_error(split):
+    with pytest.raises(ValueError, match="unsupported split"):
+        _record(split=split).validate()
+
+
 @pytest.mark.parametrize("schema_version", [True, 1.0, "1"])
 def test_manifest_requires_exact_integer_schema_version(schema_version):
     with pytest.raises(ValueError, match="unsupported manifest schema_version"):
@@ -148,6 +154,12 @@ def test_manifest_import_does_not_load_opencv_in_fresh_interpreter():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_package_exports_structured_sample_error():
+    from datasets.sana_wm import SampleReadError as ExportedSampleReadError
+
+    assert ExportedSampleReadError is SampleReadError
 
 
 def test_inconsistent_video_frames_become_sample_failure(tmp_path, monkeypatch):

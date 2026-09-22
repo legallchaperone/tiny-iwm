@@ -65,7 +65,7 @@ class ManifestRecord:
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
-        if self.split not in _VALID_SPLITS:
+        if not isinstance(self.split, str) or self.split not in _VALID_SPLITS:
             raise ValueError(f"unsupported split {self.split!r}")
         for name in ("video_path", "camera_path", "metadata_path"):
             if Path(getattr(self, name)).is_absolute():

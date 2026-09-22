@@ -116,6 +116,8 @@ class SANAReader:
             raise SampleReadError(record.sample_id, "camera", f"non-numeric values: {exc}") from exc
         if c2w.ndim != 3 or c2w.shape[1:] != (4, 4):
             raise SampleReadError(record.sample_id, "camera", "c2w must have shape [T, 4, 4]")
+        if c2w.shape[0] == 0:
+            raise SampleReadError(record.sample_id, "camera", "camera trajectory must not be empty")
         if intrinsics.shape != (c2w.shape[0], 3, 3):
             raise SampleReadError(record.sample_id, "camera", "intrinsics must have shape [T, 3, 3]")
         if timestamps.shape != (c2w.shape[0],):

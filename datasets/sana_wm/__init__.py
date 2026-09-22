@@ -12,12 +12,13 @@ __all__ = [
     "ManifestRecord",
     "SANAReader",
     "SANASample",
+    "SampleReadError",
     "load_manifest",
 ]
 
 
 def __getattr__(name: str):
-    if name in {"CameraData", "SANAReader", "SANASample"}:
+    if name in {"CameraData", "SANAReader", "SANASample", "SampleReadError"}:
         from datasets.sana_wm import reader
 
         return getattr(reader, name)
