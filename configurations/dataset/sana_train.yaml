@@ -4,5 +4,5 @@ manifest: null       # local, versioned manifest path
 data_root: null      # local dataset root
 rgb_frames: 961
 fps: 16
-resolution: null     # unresolved after memory profiling
+resolution: [128, 128]
 validation_manifest: null

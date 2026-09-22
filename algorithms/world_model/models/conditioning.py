@@ -35,5 +35,8 @@ class TimestepConditioner(nn.Module):
         )
 
     def forward(self, timestep: torch.Tensor) -> torch.Tensor:
-        return self.mlp(sinusoidal_timestep_embedding(timestep, self.frequency_width))
-
+        embedding = sinusoidal_timestep_embedding(timestep, self.frequency_width)
+        # Trigonometric features are intentionally computed in float32, then
+        # cross the model precision boundary exactly once before the MLP.
+        embedding = embedding.to(dtype=self.mlp[0].weight.dtype)
+        return self.mlp(embedding)

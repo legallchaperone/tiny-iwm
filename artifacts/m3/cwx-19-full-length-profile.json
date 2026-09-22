@@ -1,0 +1,225 @@
+{
+  "decision": {
+    "rationale": "The selected setting preserves the formal 961-frame/60-second protocol and leaves measured memory headroom. 128px/patch1 and 256px/patch2 both quadruple token count and increase conceptual dense attention by 16x.",
+    "selected_execution": "single_A10G_no_activation_checkpointing",
+    "selected_patch_size": [
+      1,
+      2,
+      2
+    ],
+    "selected_precision": "bfloat16",
+    "selected_resolution": [
+      128,
+      128
+    ],
+    "selected_tokens": 484
+  },
+  "execution": {
+    "activation_checkpointing": false,
+    "allow_bf16_reduced_precision_reduction": false,
+    "allow_fp16_reduced_precision_reduction": false,
+    "allow_tf32": false,
+    "attention_backend": "torch_scaled_dot_product_attention_auto",
+    "batch_size": 1,
+    "cuda_math_policy": "strict_no_tf32_no_reduced_reduction_v1",
+    "data_loader_workers": 0,
+    "flash_sdp_enabled": true,
+    "gradient_accumulation": 1,
+    "math_sdp_enabled": true,
+    "memory_efficient_sdp_enabled": true,
+    "optimizer": "AdamW",
+    "optimizer_lr": 0.0001,
+    "optimizer_weight_decay": 0.01,
+    "precision": "bfloat16",
+    "sampling_solver": "Euler",
+    "sampling_steps": 16,
+    "torch_compile": false
+  },
+  "execution_comparison": [
+    {
+      "measured": true,
+      "name": "single_A10G_bfloat16_no_checkpointing",
+      "reason": "Measured peak memory leaves substantial device headroom.",
+      "selected": true
+    },
+    {
+      "measured": false,
+      "name": "single_A10G_bfloat16_activation_checkpointing",
+      "reason": "Viable fallback, but recomputation is unnecessary at the measured shape.",
+      "selected": false
+    },
+    {
+      "measured": false,
+      "name": "multi_gpu_data_parallel",
+      "reason": "Useful for throughput scaling; does not reduce per-rank model memory here.",
+      "selected": false
+    }
+  ],
+  "hardware": {
+    "compute_capability": "8.6",
+    "cuda_runtime": "12.8",
+    "device": "NVIDIA A10G",
+    "modal_gpu_request": "A10G",
+    "python": "3.12.10",
+    "torch": "2.8.0+cu128",
+    "total_memory_bytes": 23684841472
+  },
+  "issue": "CWX-19",
+  "measurements": {
+    "dense_attention_score_bytes_per_layer": 7496192,
+    "full_961_frame_rollout_seconds": 0.7524909550000007,
+    "measured_training_steps": 3,
+    "peak_rollout_allocated_bytes": 1251409408,
+    "peak_rollout_reserved_bytes": 1495269376,
+    "peak_training_allocated_bytes": 3090054144,
+    "peak_training_reserved_bytes": 3533701120,
+    "projected_kv_bytes_all_layers": 38658048,
+    "projected_kv_bytes_per_layer": 1610752,
+    "training_loss": [
+      3.03125,
+      2.625,
+      2.34375
+    ],
+    "training_step_seconds": [
+      0.1554283070000011,
+      0.1477175130000017,
+      0.15095259599999977
+    ],
+    "training_step_seconds_mean": 0.1513661386666675,
+    "warmup_steps": 1
+  },
+  "model": {
+    "depth": 24,
+    "hidden_size": 832,
+    "latent_shape": [
+      1,
+      128,
+      121,
+      4,
+      4
+    ],
+    "num_heads": 16,
+    "patch_size": [
+      1,
+      2,
+      2
+    ],
+    "tokens": 484,
+    "trainable_parameters": 302486592
+  },
+  "physical_protocol": {
+    "duration_seconds": 60,
+    "fps": 16,
+    "latent_frames": 121,
+    "rgb_frames": 961,
+    "temporal_compression": 8
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "variant_comparison": [
+    {
+      "dense_attention_ratio_vs_selected": 1.0,
+      "latent_shape": [
+        1,
+        128,
+        121,
+        4,
+        4
+      ],
+      "name": "128px_patch2_selected",
+      "patch_size": [
+        1,
+        2,
+        2
+      ],
+      "physical_duration_seconds": 60,
+      "physical_rgb_frames": 961,
+      "projected_kv_bytes_all_layers": 38658048,
+      "projected_kv_bytes_per_layer": 1610752,
+      "resolution": [
+        128,
+        128
+      ],
+      "token_ratio_vs_selected": 1.0,
+      "tokens": 484
+    },
+    {
+      "dense_attention_ratio_vs_selected": 16.0,
+      "latent_shape": [
+        1,
+        128,
+        121,
+        4,
+        4
+      ],
+      "name": "128px_patch1",
+      "patch_size": [
+        1,
+        1,
+        1
+      ],
+      "physical_duration_seconds": 60,
+      "physical_rgb_frames": 961,
+      "projected_kv_bytes_all_layers": 154632192,
+      "projected_kv_bytes_per_layer": 6443008,
+      "resolution": [
+        128,
+        128
+      ],
+      "token_ratio_vs_selected": 4.0,
+      "tokens": 1936
+    },
+    {
+      "dense_attention_ratio_vs_selected": 16.0,
+      "latent_shape": [
+        1,
+        128,
+        121,
+        8,
+        8
+      ],
+      "name": "256px_patch2",
+      "patch_size": [
+        1,
+        2,
+        2
+      ],
+      "physical_duration_seconds": 60,
+      "physical_rgb_frames": 961,
+      "projected_kv_bytes_all_layers": 154632192,
+      "projected_kv_bytes_per_layer": 6443008,
+      "resolution": [
+        256,
+        256
+      ],
+      "token_ratio_vs_selected": 4.0,
+      "tokens": 1936
+    },
+    {
+      "dense_attention_ratio_vs_selected": 1.0,
+      "latent_shape": [
+        1,
+        128,
+        121,
+        8,
+        8
+      ],
+      "name": "256px_patch4",
+      "patch_size": [
+        1,
+        4,
+        4
+      ],
+      "physical_duration_seconds": 60,
+      "physical_rgb_frames": 961,
+      "projected_kv_bytes_all_layers": 38658048,
+      "projected_kv_bytes_per_layer": 1610752,
+      "resolution": [
+        256,
+        256
+      ],
+      "token_ratio_vs_selected": 1.0,
+      "tokens": 484
+    }
+  ]
+}

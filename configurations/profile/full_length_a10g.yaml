@@ -1,0 +1,19 @@
+protocol:
+  rgb_frames: 961
+  fps: 16
+  duration_seconds: 60
+  resolution: [128, 128]
+model:
+  latent_shape: [1, 128, 121, 4, 4]
+  patch_size: [1, 2, 2]
+  tokens: 484
+execution:
+  hardware: NVIDIA_A10G
+  precision: bfloat16
+  attention_backend: torch_scaled_dot_product_attention_auto
+  activation_checkpointing: false
+  batch_size: 1
+  gradient_accumulation: 1
+  sampling_solver: euler
+  sampling_steps: 16
+  torch_compile: false
