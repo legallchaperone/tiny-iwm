@@ -13,7 +13,11 @@ class ExponentialMovingAverage:
         self.decay = float(decay)
         self.num_updates = 0
         self.shadow = {
-            name: value.detach().clone()
+            name: value.detach().to(
+                dtype=torch.float32
+                if value.dtype in (torch.float16, torch.bfloat16)
+                else value.dtype
+            ).clone()
             for name, value in model.state_dict().items()
             if value.is_floating_point()
         }
@@ -34,25 +38,33 @@ class ExponentialMovingAverage:
     def copy_to(self, model: nn.Module) -> None:
         state = model.state_dict()
         for name, shadow in self.shadow.items():
-            state[name].copy_(shadow.to(device=state[name].device, dtype=state[name].dtype))
+            state[name].copy_(
+                shadow.to(device=state[name].device, dtype=state[name].dtype)
+            )
 
     def state_dict(self) -> dict[str, object]:
         return {
             "decay": self.decay,
             "num_updates": self.num_updates,
-            "shadow": {name: value.detach().clone() for name, value in self.shadow.items()},
+            "shadow": {
+                name: value.detach().clone() for name, value in self.shadow.items()
+            },
         }
 
     def load_state_dict(self, state: Mapping[str, object]) -> None:
         decay = float(state["decay"])
         if decay != self.decay:
-            raise ValueError(f"EMA decay mismatch: checkpoint={decay}, runtime={self.decay}")
+            raise ValueError(
+                f"EMA decay mismatch: checkpoint={decay}, runtime={self.decay}"
+            )
         shadow = state["shadow"]
         if not isinstance(shadow, Mapping) or shadow.keys() != self.shadow.keys():
             raise ValueError("EMA checkpoint keys do not match the model")
         for name, value in shadow.items():
-            if not isinstance(value, torch.Tensor) or value.shape != self.shadow[name].shape:
+            if (
+                not isinstance(value, torch.Tensor)
+                or value.shape != self.shadow[name].shape
+            ):
                 raise ValueError(f"invalid EMA tensor for {name}")
             self.shadow[name].copy_(value)
         self.num_updates = int(state["num_updates"])
-

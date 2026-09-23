@@ -194,7 +194,6 @@ def prepare_data(force: bool = False) -> str:
 )
 def train(manifest_json: str) -> str:
     """Train only from prepared volume data and persist the selected checkpoint."""
-    import numpy as np
     import torch
     import yaml
 
@@ -206,12 +205,12 @@ def train(manifest_json: str) -> str:
     from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
     from algorithms.world_model.models.prope import (
         TokenCameraProjection,
-        build_token_camera_projection,
     )
     from algorithms.world_model.training_batch import StageABatchBuilder
-    from core.camera import CameraCondition, IntrinsicsSpace
+    from core.camera import CameraCondition
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
+    from scripts.prepared_stage_data import load_prepared_sample
     from runtime import (
         CheckpointProvenance,
         ExponentialMovingAverage,
@@ -264,42 +263,10 @@ def train(manifest_json: str) -> str:
         initial_condition_frames=1,
     )
 
-    def load_sample(record: dict[str, object]) -> tuple[torch.Tensor, CameraCondition, TokenCameraProjection]:
-        arrays = np.load(str(record["prepared_path"]), allow_pickle=False)
-        clean = torch.from_numpy(arrays["z"]).unsqueeze(0).to(device=device, dtype=dtype)
-        c2w = torch.from_numpy(arrays["pose"]).unsqueeze(0).to(device=device, dtype=torch.float32)
-        values = torch.from_numpy(arrays["intrinsics"]).to(device=device, dtype=torch.float32)
-        k = torch.zeros((961, 3, 3), device=device, dtype=torch.float32)
-        k[:, 0, 0] = values[:, 0] * (1280 / 1920)
-        k[:, 1, 1] = values[:, 1] * (720 / 1080)
-        k[:, 0, 2] = values[:, 2] * (1280 / 1920) - 576
-        k[:, 1, 2] = values[:, 3] * (720 / 1080) - 8 - 288
-        k[:, 2, 2] = 1
-        camera = CameraCondition(
-            c2w=c2w,
-            intrinsics=k.unsqueeze(0),
-            timestamps_seconds=(torch.arange(961, device=device)[None] / 16),
-            intrinsics_space=IntrinsicsSpace.RGB_PIXELS,
-            preprocessing=(
-                "resize_rgb:1080x1920->720x1280",
-                "crop_rgb:left=0,top=8,size=704x1280",
-                "crop_rgb:left=576,top=288,size=128x128",
-            ),
-        )
-        projection = build_token_camera_projection(
-            camera, layout, grid_shape=(121, 2, 2), image_size=(128, 128)
-        )
-        projection = TokenCameraProjection(
-            projection.projection.to(dtype),
-            projection.transpose.to(dtype),
-            projection.inverse.to(dtype),
-        )
-        return clean, camera, projection
-
     train_records = manifest["splits"]["train"]
     validation_records = manifest["splits"]["validation"]
-    train_cache = [load_sample(record) for record in train_records]
-    validation_cache = [load_sample(record) for record in validation_records]
+    train_cache = [load_prepared_sample(record, device=device, dtype=dtype, layout=layout) for record in train_records]
+    validation_cache = [load_prepared_sample(record, device=device, dtype=dtype, layout=layout) for record in validation_records]
 
     def loss_for(
         clean: torch.Tensor,
