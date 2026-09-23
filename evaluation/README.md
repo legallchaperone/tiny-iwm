@@ -34,3 +34,7 @@ revision, numerical settings and hardware backend, seed, and sampler. `claim_out
 matching `identity.json` into an identity-specific directory and rejects a
 conflicting claim. Generation and scoring should verify this identity before
 using any video from that directory.
+
+Official generation admits only the source-image initial prefix. The sampler
+records `initial_history_policy: source_image_only`; a resumed or prefetched
+rollout with additional clean chunks is outside this evaluation identity.

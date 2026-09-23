@@ -137,9 +137,17 @@ def generation_identity(
         type(value) is not int or value <= 0 for value in spatial_resolution
     ):
         raise ValueError("spatial resolution must be positive integer height and width")
-    required_sampler = {"solver", "steps", "cfg_scale", "history_policy"}
+    required_sampler = {
+        "solver",
+        "steps",
+        "cfg_scale",
+        "history_policy",
+        "initial_history_policy",
+    }
     if not required_sampler <= sampler.keys():
         raise ValueError("sampler must identify solver, steps, CFG, and history policy")
+    if sampler["initial_history_policy"] != "source_image_only":
+        raise ValueError("official evaluation permits only the source-image prefix")
     if not {"camera", "text"} <= conditioning.keys():
         raise ValueError("conditioning must identify camera and text branches")
     camera, text = conditioning["camera"], conditioning["text"]

@@ -84,6 +84,7 @@ def _identity(selection, row, **overrides):
             "steps": 25,
             "cfg_scale": 1.0,
             "history_policy": "clean_cached",
+            "initial_history_policy": "source_image_only",
         },
     }
     inputs.update(overrides)
@@ -234,6 +235,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
                 "steps": 26,
                 "cfg_scale": 1.0,
                 "history_policy": "clean_cached",
+                "initial_history_policy": "source_image_only",
             },
         ),
         _identity(selection, selection["rows"][1]),
@@ -252,6 +254,12 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
     selection = _selection()
     row = selection["rows"][0]
     identity = _identity(selection, row)
+    with pytest.raises(ValueError, match="source-image prefix"):
+        _identity(
+            selection,
+            row,
+            sampler={**identity["sampler"], "initial_history_policy": "prefilled"},
+        )
     changed_selection = dict(selection)
     changed_selection["dataset_revision"] = "0" * 40
     with pytest.raises(ValueError, match="selection content differs"):
