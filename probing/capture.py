@@ -57,6 +57,8 @@ class CaptureContext:
     flow_time: float
     branch: str
     forward_purpose: str
+    selection_id: str | None = None
+    generation_id: str | None = None
 
 
 class FeatureRecorder:
@@ -152,6 +154,8 @@ class FeatureRecorder:
                     physical_position=token.physical_position,
                     branch=context.branch,
                     forward_purpose=context.forward_purpose,
+                    selection_id=context.selection_id,
+                    generation_id=context.generation_id,
                 )
                 payload = asdict(event)
                 payload["token_index"] = token.index

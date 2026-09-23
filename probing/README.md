@@ -37,3 +37,16 @@ generated-history records from the same checkpoint/config and reports drift
 separately by layer and each rollout/FM time. Reports link to the exact raw
 files and hash both record metadata and raw tensor bytes. At least two matched
 observations per comparison group are required.
+
+## Held-out controlled replay
+
+`controlled_replay` accepts one held-out sample's ground-truth and generated
+clean histories through the same `HistorySession` reference forward. It fixes
+the clean target, noise, Flow Matching time, camera projection, text-disabled
+condition, and selected probe tokens. Its two forwards differ only in history
+source. The returned report records hashes of those fixed inputs, both history
+hashes, provenance IDs, and prediction error/drift. Join it to rollout or
+revisit results using `selection_id`, `generation_id`, and `sample_id`; the
+report is labeled as a controlled replay rather than an observed rollout.
+Captured replay records also carry `selection_id` and `generation_id`, so
+separate runs can share a bounded capture directory without identity collisions.
