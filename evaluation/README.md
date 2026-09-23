@@ -59,7 +59,10 @@ requires a single compatible run identity across scenes, then links each
 an immutable `staging.json` recording the source commit, license, zero local
 modifications, selected scene identities, and source paths. Staging uses
 `ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count
-and FPS. It rejects any extra generated video in a scored split. For example:
+and FPS. It rejects any extra generated video in a scored split. If multiple
+generation identities exist for a scene, staging reports the
+available shared run IDs. Pass `--run-id sha256:...` and use a separate method
+directory for each run. For example:
 
 ```bash
 python -m evaluation.official stage \

@@ -8,6 +8,7 @@ from core.video_layout import CodecTemporalSpec, VideoLayout
 from evaluation.identity import claim_output_directory, generation_identity
 from evaluation.official import (
     OFFICIAL_COMMIT,
+    RUN_FIELDS,
     _validate_video,
     metric_commands,
     score_official,
@@ -199,6 +200,30 @@ def test_staging_rejects_unselected_video(tmp_path, monkeypatch):
     extra.write_bytes(b"stale video")
     with pytest.raises(ValueError, match="video set differs"):
         stage_official_inputs(*paths, seed=42)
+
+
+def test_staging_selects_one_run_from_multiple_generation_identities(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    paths = _fixture(tmp_path)
+    original = json.loads(
+        next(paths[2].glob("simple_60s/game_style_001/*/identity.json")).read_text()
+    )
+    alternate = dict(original, sampler={**original["sampler"], "steps": 26})
+    alternate["generation_id"] = sha256(
+        canonical_bytes(
+            {key: value for key, value in alternate.items() if key != "generation_id"}
+        )
+    )
+    alternate_dir = claim_output_directory(paths[2], alternate)
+    (alternate_dir / "video.mp4").write_bytes(b"alternate run")
+    with pytest.raises(ValueError, match="available run IDs"):
+        stage_official_inputs(*paths, seed=42)
+    run_id = sha256(canonical_bytes({field: original[field] for field in RUN_FIELDS}))
+    report = stage_official_inputs(*paths, seed=42, run_id=run_id)
+    assert report["run_id"] == run_id
+    assert len(report["staged"]) == 2
 
 
 def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):

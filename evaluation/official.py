@@ -129,6 +129,7 @@ def stage_official_inputs(
     method_dir: Path,
     *,
     seed: int,
+    run_id: str | None = None,
 ) -> dict:
     """Adapt directory format only; never edit metric code or generated videos."""
     selection = _selection(selection_path)
@@ -147,15 +148,23 @@ def stage_official_inputs(
         candidates = sorted(
             (outputs_root / row["split"] / row["scene_id"]).glob("*/identity.json")
         )
-        if len(candidates) != 1:
+        matched = []
+        available = set()
+        for candidate in candidates:
+            identity = json.loads(candidate.read_text())
+            verify_output_identity(candidate.parent, identity)
+            _verify_identity(identity, selection, row)
+            run = {field: identity[field] for field in RUN_FIELDS}
+            candidate_run_id = sha256(canonical_bytes(run))
+            available.add(candidate_run_id)
+            if run_id is None or candidate_run_id == run_id:
+                matched.append((candidate.parent, identity, run, candidate_run_id))
+        if len(matched) != 1:
             raise ValueError(
-                f"expected one generation identity for {key}, found {len(candidates)}"
+                f"expected one generation identity for {key}, found {len(matched)}; "
+                f"available run IDs: {sorted(available)}"
             )
-        directory = candidates[0].parent
-        identity = json.loads(candidates[0].read_text())
-        verify_output_identity(directory, identity)
-        _verify_identity(identity, selection, row)
-        run = {field: identity[field] for field in RUN_FIELDS}
+        directory, identity, run, selected_run_id = matched[0]
         if shared_run is None:
             shared_run = run
         elif run != shared_run:
@@ -193,6 +202,7 @@ def stage_official_inputs(
         "selection_id": selection["selection_id"],
         "dataset_revision": selection["dataset_revision"],
         "generation_seed": seed,
+        "run_id": selected_run_id,
         "run_identity": shared_run,
         "official_source": {
             "repository": OFFICIAL_REPO,
@@ -288,6 +298,7 @@ def score_official(
     official_repo: Path,
     *,
     seed: int,
+    run_id: str | None = None,
 ) -> None:
     """Rerun scoring from existing videos without invoking generation."""
     official_repo = official_repo.resolve(strict=True)
@@ -295,7 +306,12 @@ def score_official(
     method_dir = method_dir.resolve()
     _verify_official_checkout(official_repo)
     staged = stage_official_inputs(
-        selection_path, benchmark_root, outputs_root, method_dir, seed=seed
+        selection_path,
+        benchmark_root,
+        outputs_root,
+        method_dir,
+        seed=seed,
+        run_id=run_id,
     )
     for split in sorted({row["split"] for row in staged["staged"]}):
         metric, camera = metric_commands(
@@ -313,15 +329,21 @@ def main() -> None:
     parser.add_argument("--outputs-root", type=Path, required=True)
     parser.add_argument("--method-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--run-id", help="SHA-256 of the shared run identity")
     parser.add_argument("--official-repo", type=Path)
     args = parser.parse_args()
     paths = (args.selection, args.benchmark_root, args.outputs_root, args.method_dir)
     if args.mode == "stage":
-        print(json.dumps(stage_official_inputs(*paths, seed=args.seed), sort_keys=True))
+        print(
+            json.dumps(
+                stage_official_inputs(*paths, seed=args.seed, run_id=args.run_id),
+                sort_keys=True,
+            )
+        )
     else:
         if args.official_repo is None:
             parser.error("--official-repo is required for score")
-        score_official(*paths, args.official_repo, seed=args.seed)
+        score_official(*paths, args.official_repo, seed=args.seed, run_id=args.run_id)
 
 
 if __name__ == "__main__":
