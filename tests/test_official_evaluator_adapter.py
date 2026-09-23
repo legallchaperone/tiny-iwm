@@ -97,6 +97,7 @@ def _fixture(tmp_path):
                 "cfg_scale": 1,
                 "history_policy": "clean_cached",
                 "initial_history_policy": "source_image_only",
+                "batch_size": 1,
             },
         )
         directory = claim_output_directory(outputs, identity)
