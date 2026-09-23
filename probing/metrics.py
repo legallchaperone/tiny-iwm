@@ -289,6 +289,9 @@ def compare_capture_roots(left_root: Path, right_root: Path) -> dict:
                     field: right_records[indices[0]][field]
                     for field in ("checkpoint_id", "config_id", "training_seed")
                 },
+                "right_raw_files": [
+                    right_records[index]["raw_file"] for index in indices
+                ],
                 **compare_features(
                     torch.stack([left[index] for index in indices]),
                     torch.stack([right[index] for index in indices]),
@@ -300,6 +303,7 @@ def compare_capture_roots(left_root: Path, right_root: Path) -> dict:
         "fixed_fields": list(VARIANT_FIELDS),
         "left_capture_identity": summarize_capture(left_root)["capture_identity"],
         "right_capture_identity": summarize_capture(right_root)["capture_identity"],
+        "right_source_directory": str(right_root),
         "per_group": comparisons,
     }
 

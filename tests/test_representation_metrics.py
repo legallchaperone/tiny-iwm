@@ -153,6 +153,8 @@ def test_variant_comparison_requires_matched_token_rows(tmp_path):
     result = compare_capture_roots(left, right)
     assert result["per_group"][0]["matched_observations"] == 2
     assert result["left_capture_identity"] != result["right_capture_identity"]
+    assert result["right_source_directory"] == str(right)
+    assert len(result["per_group"][0]["right_raw_files"]) == 2
     _write(right, "denoise", 8, "scene-c", [3, 5])
     with pytest.raises(ValueError, match="fixed sample/time/token"):
         compare_capture_roots(left, right)
