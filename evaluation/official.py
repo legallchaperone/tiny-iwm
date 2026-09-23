@@ -356,11 +356,23 @@ def metric_commands(
     return metric, camera
 
 
-def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None:
+def _verify_scored_split(
+    method_dir: Path, benchmark_root: Path, split: str, rows: list[dict]
+) -> None:
     expected = {row["scene_id"] for row in rows}
-    expected_pairs = {
-        row["scene_id"]: min(5, row["evaluation_pair_count"]) for row in rows
+    metadata_path = benchmark_root / SPLIT_DIRS[split] / "scene_trajectories_v2.json"
+    trajectories = {
+        scene["scene_id"]: scene
+        for scene in json.loads(metadata_path.read_text())["scenes"]
     }
+    expected_pairs = {}
+    for row in rows:
+        pairs = trajectories[row["scene_id"]]["evaluation_pairs"]
+        if sha256(canonical_bytes(pairs)) != row["evaluation_pairs_sha256"]:
+            raise ValueError("official revisit pairs differ from frozen selection")
+        expected_pairs[row["scene_id"]] = sorted(
+            pairs, key=lambda pair: pair.get("quality_score", 999)
+        )[:5]
     scoring_frames = {row["scene_id"]: row["official_scoring_frames"] for row in rows}
     camera_frames = {
         row["scene_id"]: (row["sanawm_frames"] - 1) // 4 + 1 for row in rows
@@ -387,10 +399,10 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         or any(
             not _valid_camera_result(poses[scene], camera_frames[scene])
             or not _valid_camera_result(camera[scene], camera_frames[scene])
-            or not _valid_revisit_result(per_scene[scene], count, scoring_frames[scene])
-            for scene, count in expected_pairs.items()
+            or not _valid_revisit_result(per_scene[scene], pairs, scoring_frames[scene])
+            for scene, pairs in expected_pairs.items()
         )
-        or revisit["summary"]["n_total_pairs"] != sum(expected_pairs.values())
+        or revisit["summary"]["n_total_pairs"] != sum(map(len, expected_pairs.values()))
         or summary["n_videos"] != len(expected)
         or summary["split"] != split
         or summary["camera"]["n_scenes"] != len(expected)
@@ -398,6 +410,14 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         or set(vbench["raw_scores"]) != set(VBenCH_DIMS)
         or set(temporal["windows"]) != expected_windows
         or "temporal_degradation" not in summary
+        or not _valid_aggregates(
+            revisit,
+            vbench,
+            temporal,
+            summary,
+            expected_windows,
+            sum(map(len, expected_pairs.values())),
+        )
         or not _finite_tree((poses, revisit, camera, vbench, temporal, summary))
     ):
         raise ValueError(f"official scorer returned incomplete coverage for {split}")
@@ -438,15 +458,17 @@ def _valid_camera_result(value: object, expected_frames: int) -> bool:
     )
 
 
-def _valid_revisit_result(value: object, count: int, frames: int) -> bool:
+def _valid_revisit_result(
+    value: object, selected_pairs: list[dict], frames: int
+) -> bool:
     if not isinstance(value, dict):
         return False
     pairs = value.get("pairs")
     return (
         type(value.get("n_pairs")) is int
-        and value["n_pairs"] == count
+        and value["n_pairs"] == len(selected_pairs)
         and isinstance(pairs, list)
-        and len(pairs) == count
+        and len(pairs) == len(selected_pairs)
         and all(
             isinstance(pair, dict)
             and all(
@@ -457,13 +479,72 @@ def _valid_revisit_result(value: object, count: int, frames: int) -> bool:
             and all(
                 _finite_number(pair.get(field)) for field in ("psnr", "ssim", "lpips")
             )
-            for pair in pairs
+            and (pair["frame_a"], pair["frame_b"])
+            == (selected["frame_a"], selected["frame_b"])
+            for pair, selected in zip(pairs, selected_pairs)
         )
         and all(
             _finite_number(value.get(field))
             for field in ("mean_psnr", "mean_ssim", "mean_lpips")
         )
     )
+
+
+def _valid_aggregates(
+    revisit: dict,
+    vbench: dict,
+    temporal: dict,
+    summary: dict,
+    windows: set[str],
+    pair_count: int,
+) -> bool:
+    try:
+        revisit_summary = revisit["summary"]
+        camera_summary = summary["camera"]
+        vbench_summary = summary["vbench"]
+        trend = temporal["trend"]
+        return (
+            revisit_summary.get("n_lpips_pairs") == pair_count
+            and all(
+                _finite_number(revisit_summary.get(field))
+                for field in (
+                    "overall_mean_psnr",
+                    "overall_mean_ssim",
+                    "overall_mean_lpips",
+                )
+            )
+            and all(
+                _finite_number(camera_summary.get(field))
+                for field in ("mean_rot_err_deg", "mean_trans_err_rel")
+            )
+            and all(
+                _finite_number(vbench_summary.get(field))
+                for field in ("quality_score", "semantic_score", "total_score")
+            )
+            and all(_finite_number(value) for value in vbench["raw_scores"].values())
+            and summary["temporal_degradation"] == trend
+            and set(trend) == set(TEMPORAL_DIMS)
+            and all(
+                set(temporal["windows"][window]) == set(TEMPORAL_DIMS)
+                and all(
+                    _finite_number(value)
+                    for value in temporal["windows"][window].values()
+                )
+                for window in windows
+            )
+            and all(
+                all(
+                    _finite_number(values.get(field))
+                    for field in ("first_window", "last_window", "degradation")
+                )
+                and isinstance(values.get("per_window"), list)
+                and len(values["per_window"]) == len(windows)
+                and all(_finite_number(value) for value in values["per_window"])
+                for values in trend.values()
+            )
+        )
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
 
 
 def _verify_vbench_scene_results(
@@ -533,7 +614,10 @@ def score_official(
                 if _file_sha256(Path(row["source_video"])) != row["video_sha256"]:
                     raise ValueError("staged video changed during official scoring")
         _verify_scored_split(
-            method_dir, split, [row for row in selected_rows if row["split"] == split]
+            method_dir,
+            benchmark_root,
+            split,
+            [row for row in selected_rows if row["split"] == split],
         )
     _verify_official_checkout(official_repo)
 

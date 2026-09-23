@@ -240,10 +240,24 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     split = tmp_path / "simple_60s"
     split.mkdir()
     scenes = ("game_style_001", "indoor_001")
+    benchmark = tmp_path / "benchmark/benchmark_v2_smooth_60s"
+    benchmark.mkdir(parents=True)
+    selected_pairs = [{"frame_a": 1, "frame_b": 2}]
+    (benchmark / "scene_trajectories_v2.json").write_text(
+        json.dumps(
+            {
+                "scenes": [
+                    {"scene_id": scene, "evaluation_pairs": selected_pairs}
+                    for scene in scenes
+                ]
+            }
+        )
+    )
     rows = [
         {
             "scene_id": scene,
             "evaluation_pair_count": 1,
+            "evaluation_pairs_sha256": sha256(canonical_bytes(selected_pairs)),
             "sanawm_frames": 961,
             "official_scoring_frames": 960,
             "fps": 16,
@@ -283,15 +297,38 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
             }
             for scene in scenes
         },
-        "summary": {"n_total_pairs": 2},
+        "summary": {
+            "n_total_pairs": 2,
+            "n_lpips_pairs": 2,
+            "overall_mean_psnr": 20.0,
+            "overall_mean_ssim": 0.8,
+            "overall_mean_lpips": 0.1,
+        },
     }
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     (root / "vbench_scores.json").write_text(
         json.dumps({"raw_scores": {dimension: 0.5 for dimension in VBenCH_DIMS}})
     )
     windows = {f"w{index}_{index * 10}s-{(index + 1) * 10}s" for index in range(6)}
+    trend = {
+        dimension: {
+            "first_window": 0.5,
+            "last_window": 0.5,
+            "degradation": 0.0,
+            "per_window": [0.5] * 6,
+        }
+        for dimension in TEMPORAL_DIMS
+    }
     (root / "temporal_degradation.json").write_text(
-        json.dumps({"windows": {window: {"score": 0.5} for window in windows}})
+        json.dumps(
+            {
+                "windows": {
+                    window: {dimension: 0.5 for dimension in TEMPORAL_DIMS}
+                    for window in windows
+                },
+                "trend": trend,
+            }
+        )
     )
     for result_root, dimensions in [
         (root, VBenCH_DIMS),
@@ -323,19 +360,41 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
             {
                 "n_videos": 2,
                 "split": "simple_60s",
-                "camera": {"n_scenes": 2},
-                "vbench": {"n_dimensions": 9},
-                "temporal_degradation": {"score": 0.5},
+                "camera": {
+                    "n_scenes": 2,
+                    "mean_rot_err_deg": 1.0,
+                    "mean_trans_err_rel": 0.2,
+                },
+                "vbench": {
+                    "n_dimensions": 9,
+                    "quality_score": 0.5,
+                    "semantic_score": 0.5,
+                    "total_score": 0.5,
+                },
+                "temporal_degradation": trend,
             }
         )
     )
-    _verify_scored_split(tmp_path, "simple_60s", rows)
+    _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
+    revisit["per_scene"][scenes[1]]["pairs"][0]["frame_b"] = 3
+    (root / "revisit_consistency.json").write_text(json.dumps(revisit))
+    with pytest.raises(ValueError, match="incomplete coverage"):
+        _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
+    revisit["per_scene"][scenes[1]]["pairs"][0]["frame_b"] = 2
+    (root / "revisit_consistency.json").write_text(json.dumps(revisit))
+    vbench = {"raw_scores": {dimension: 0.5 for dimension in VBenCH_DIMS}}
+    vbench["raw_scores"][VBenCH_DIMS[0]] = None
+    (root / "vbench_scores.json").write_text(json.dumps(vbench))
+    with pytest.raises(ValueError, match="incomplete coverage"):
+        _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
+    vbench["raw_scores"][VBenCH_DIMS[0]] = 0.5
+    (root / "vbench_scores.json").write_text(json.dumps(vbench))
     pose["n_frames"] = 1
     (split / "eval_poses.json").write_text(
         json.dumps({scene: pose for scene in scenes})
     )
     with pytest.raises(ValueError, match="incomplete coverage"):
-        _verify_scored_split(tmp_path, "simple_60s", rows)
+        _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
     pose["n_frames"] = 241
     (split / "eval_poses.json").write_text(
         json.dumps({scene: pose for scene in scenes})
@@ -343,12 +402,12 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     revisit["per_scene"][scenes[1]]["n_pairs"] = 0
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     with pytest.raises(ValueError, match="incomplete coverage"):
-        _verify_scored_split(tmp_path, "simple_60s", rows)
+        _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
     revisit["per_scene"][scenes[1]]["n_pairs"] = 1
     revisit["per_scene"][scenes[1]]["mean_psnr"] = float("nan")
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     with pytest.raises(ValueError, match="incomplete coverage"):
-        _verify_scored_split(tmp_path, "simple_60s", rows)
+        _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
     revisit["per_scene"][scenes[1]]["mean_psnr"] = 20.0
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     path = root / f"eval_{VBenCH_DIMS[0]}_eval_results.json"
@@ -368,7 +427,7 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
         )
     )
     with pytest.raises(ValueError, match="incomplete VBench per-video"):
-        _verify_scored_split(tmp_path, "simple_60s", rows)
+        _verify_scored_split(tmp_path, tmp_path / "benchmark", "simple_60s", rows)
 
 
 def test_staging_rejects_unselected_video(tmp_path, monkeypatch):
