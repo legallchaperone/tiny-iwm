@@ -22,15 +22,30 @@ def _fixture(tmp_path):
             "scene_id": scene,
             "split": "simple_60s",
             "generation_seed": 42,
-            "conditions_sha256": "sha256:" + character * 64,
             "sanawm_frames": 961,
             "fps": 16,
         }
-        for scene, character in (("game_style_001", "a"), ("indoor_001", "b"))
+        for scene in ("game_style_001", "indoor_001")
     ]
+    source_hashes = {"kept.txt": sha256(b"pinned official metadata")}
+    for row in rows:
+        scene = row["scene_id"]
+        conditions = {}
+        for kind, relative in (
+            ("image", f"images/{scene}.png"),
+            ("camera", f"benchmark_v2_smooth_60s/sanawm_export_v2/{scene}.npz"),
+        ):
+            asset = benchmark / relative
+            asset.parent.mkdir(parents=True, exist_ok=True)
+            asset.write_bytes(relative.encode())
+            conditions[f"{kind}_path"] = relative
+            conditions[f"{kind}_sha256"] = sha256(asset.read_bytes())
+            source_hashes[relative] = conditions[f"{kind}_sha256"]
+        row["conditions"] = conditions
+        row["conditions_sha256"] = sha256(canonical_bytes(conditions))
     payload = {
         "dataset_revision": "0" * 40,
-        "source_sha256": {"kept.txt": sha256(b"pinned official metadata")},
+        "source_sha256": source_hashes,
         "rows": rows,
     }
     selection = {"selection_id": sha256(canonical_bytes(payload)), **payload}
@@ -54,6 +69,7 @@ def _fixture(tmp_path):
         identity = generation_identity(
             selection,
             row,
+            source_root=benchmark,
             checkpoint_id="sha256:" + "c" * 64,
             weight_flavor="ema",
             model_config={
