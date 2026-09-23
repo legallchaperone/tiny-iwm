@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import tempfile
 
 from core.video_layout import VideoLayout
 
-from .selection import canonical_bytes, sha256, write_immutable
+from .selection import canonical_bytes, sha256
 
 
 def _is_sha256(value: object) -> bool:
@@ -217,7 +219,22 @@ def claim_output_directory(root: Path, identity: dict) -> Path:
     directory = (
         root / identity["split"] / identity["scene_id"] / identity["generation_id"]
     )
-    write_immutable(directory / "identity.json", identity)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "identity.json"
+    if path.is_file():
+        verify_output_identity(directory, identity)
+        return directory
+    data = json.dumps(identity, sort_keys=True, indent=2).encode() + b"\n"
+    with tempfile.NamedTemporaryFile(dir=directory, delete=False) as handle:
+        temporary = Path(handle.name)
+        handle.write(data)
+    try:
+        # The directory name is the validated content hash; concurrent identical
+        # claims can safely publish the same bytes on volumes without hard links.
+        os.replace(temporary, path)
+        verify_output_identity(directory, identity)
+    finally:
+        temporary.unlink(missing_ok=True)
     return directory
 
 

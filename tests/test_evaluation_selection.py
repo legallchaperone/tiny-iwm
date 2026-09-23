@@ -287,3 +287,15 @@ def test_identical_concurrent_claim_is_idempotent(tmp_path, monkeypatch):
     path = tmp_path / "selection.json"
     write_immutable(path, _selection())
     assert json.loads(path.read_text()) == _selection()
+
+
+def test_generation_claim_works_on_volume_without_hard_links(tmp_path, monkeypatch):
+    def unsupported_hard_link(source, destination):
+        raise PermissionError("hard links unsupported")
+
+    monkeypatch.setattr("evaluation.selection.os.link", unsupported_hard_link)
+    selection = _selection()
+    identity = _identity(selection, selection["rows"][0])
+    directory = claim_output_directory(tmp_path, identity)
+    assert claim_output_directory(tmp_path, identity) == directory
+    verify_output_identity(directory, identity)
