@@ -30,12 +30,26 @@ def _identity(selection, row, **overrides):
     inputs = {
         "checkpoint_id": "sha256:" + "a" * 64,
         "weight_flavor": "ema",
+        "model_config": {
+            "latent_channels": 128,
+            "hidden_size": 832,
+            "depth": 24,
+            "num_heads": 16,
+            "patch_size": [1, 2, 2],
+            "mlp_ratio": 4.0,
+            "qkv_bias": True,
+            "prope_camera_dims": 48,
+        },
         "codec_id": "LTX2VAE_diffusers_704x1280_official_latent_cache",
         "codec_fingerprint": {
             "weights_sha256": "sha256:" + "c" * 64,
             "normalization_sha256": "sha256:" + "d" * 64,
             "encoding_policy": "bidirectional_mode_v1",
             "implementation_revision": "diffusers:0.37.0",
+            "execution_dtype": "bfloat16",
+            "execution_backend": "cuda",
+            "backend_fingerprint": BACKEND,
+            "cuda_math_policy": "strict_no_tf32_no_reduced_reduction_v1",
         },
         "spatial_resolution": (704, 1280),
         "preprocessing_id": "official_center_crop_v1",
@@ -124,6 +138,11 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
     changes = [
         _identity(selection, row, checkpoint_id="sha256:" + "b" * 64),
         _identity(selection, row, weight_flavor="model"),
+        _identity(
+            selection,
+            row,
+            model_config={**baseline["model_config"], "prope_camera_dims": 32},
+        ),
         _identity(selection, row, codec_id="other-codec"),
         _identity(
             selection,
@@ -131,6 +150,14 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
             codec_fingerprint={
                 **baseline["codec_fingerprint"],
                 "weights_sha256": "sha256:" + "e" * 64,
+            },
+        ),
+        _identity(
+            selection,
+            row,
+            codec_fingerprint={
+                **baseline["codec_fingerprint"],
+                "execution_dtype": "float32",
             },
         ),
         _identity(selection, row, spatial_resolution=(128, 128)),
@@ -211,7 +238,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 15
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 17
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)

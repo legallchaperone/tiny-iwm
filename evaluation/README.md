@@ -27,7 +27,8 @@ trajectory metadata. Their count, maximum frame index, and SHA-256 are recorded
 per row so scoring can verify it loaded the same pairs without redefining them.
 
 `generation_identity` hashes the frozen selection, checkpoint and weight flavor,
-codec weights, normalization, encoding policy, spatial resolution, preprocessing, the complete temporal rollout layout,
+resolved model configuration, codec weights, normalization, encoding and execution settings,
+spatial resolution, preprocessing, the complete temporal rollout layout,
 source conditions, resolved camera/text conditioning settings, implementation
 revision, numerical settings and hardware backend, seed, and sampler. `claim_output_directory` writes a
 matching `identity.json` into an identity-specific directory and rejects a

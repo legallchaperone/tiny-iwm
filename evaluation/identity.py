@@ -25,6 +25,7 @@ def generation_identity(
     *,
     checkpoint_id: str,
     weight_flavor: str,
+    model_config: dict,
     codec_id: str,
     codec_fingerprint: dict,
     spatial_resolution: tuple[int, int],
@@ -48,6 +49,21 @@ def generation_identity(
         raise ValueError("checkpoint_id must be a SHA-256 digest")
     if weight_flavor not in {"model", "ema"}:
         raise ValueError("weight_flavor must be model or ema")
+    if (
+        not isinstance(model_config, dict)
+        or not {
+            "latent_channels",
+            "hidden_size",
+            "depth",
+            "num_heads",
+            "patch_size",
+            "mlp_ratio",
+            "qkv_bias",
+            "prope_camera_dims",
+        }
+        <= model_config.keys()
+    ):
+        raise ValueError("resolved model configuration must include every DiT setting")
     if not codec_id or not preprocessing_id or not implementation_id or not sampler:
         raise ValueError(
             "codec, preprocessing, implementation, and sampler must be explicit"
@@ -59,6 +75,10 @@ def generation_identity(
             "normalization_sha256",
             "encoding_policy",
             "implementation_revision",
+            "execution_dtype",
+            "execution_backend",
+            "backend_fingerprint",
+            "cuda_math_policy",
         }
         <= codec_fingerprint.keys()
         or not all(
@@ -67,11 +87,18 @@ def generation_identity(
         )
         or not all(
             codec_fingerprint[key]
-            for key in ("encoding_policy", "implementation_revision")
+            for key in (
+                "encoding_policy",
+                "implementation_revision",
+                "execution_dtype",
+                "execution_backend",
+                "backend_fingerprint",
+                "cuda_math_policy",
+            )
         )
     ):
         raise ValueError(
-            "codec fingerprint must identify weights, normalization, policy, and implementation"
+            "codec fingerprint must identify weights, normalization, policy, implementation, and execution"
         )
     if (
         not {
@@ -159,6 +186,7 @@ def generation_identity(
         "seed": row["generation_seed"],
         "checkpoint_id": checkpoint_id,
         "weight_flavor": weight_flavor,
+        "model_config": model_config,
         "codec_id": codec_id,
         "codec_fingerprint": codec_fingerprint,
         "spatial_resolution": list(spatial_resolution),
