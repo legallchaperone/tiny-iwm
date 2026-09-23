@@ -257,7 +257,7 @@ def stage_official_inputs(
             "repository": OFFICIAL_REPO,
             "commit": OFFICIAL_COMMIT,
             "license": "Apache-2.0",
-            "local_modifications": [],
+            "checkout_verified": False,
         },
         "staged": staged,
     }
@@ -620,6 +620,20 @@ def score_official(
             [row for row in selected_rows if row["split"] == split],
         )
     _verify_official_checkout(official_repo)
+    write_immutable(
+        method_dir / "scoring.json",
+        {
+            "schema_version": 1,
+            "staging_sha256": sha256(canonical_bytes(staged)),
+            "official_source": {
+                "repository": OFFICIAL_REPO,
+                "commit": OFFICIAL_COMMIT,
+                "license": "Apache-2.0",
+                "local_modifications": [],
+                "checkout_verified": True,
+            },
+        },
+    )
 
 
 def main() -> None:

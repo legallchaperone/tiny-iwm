@@ -142,7 +142,7 @@ def test_staging_preserves_separate_identity_and_official_output_names(
     paths = _fixture(tmp_path)
     report = stage_official_inputs(*paths, seed=42)
     assert report["official_source"]["commit"] == OFFICIAL_COMMIT
-    assert report["official_source"]["local_modifications"] == []
+    assert report["official_source"]["checkout_verified"] is False
     assert len(report["staged"]) == 2
     assert all(
         item["video_sha256"] == sha256(b"fake video for directory adapter test")
@@ -230,6 +230,9 @@ def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeyp
         lambda command, **_: commands.append(command),
     )
     score_official(*paths, tmp_path / "Sana", seed=42)
+    scoring = json.loads((paths[3] / "scoring.json").read_text())
+    assert scoring["official_source"]["checkout_verified"] is True
+    assert scoring["official_source"]["local_modifications"] == []
     assert commands[0][1].endswith("eval_benchmark_poses.py")
     assert commands[1][1].endswith("eval_unified.py")
 

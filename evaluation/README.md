@@ -58,8 +58,8 @@ dependencies in a scoring environment only.
 The `stage` command verifies the frozen metadata and each `identity.json`,
 requires a single compatible run identity across scenes, then links each
 `video.mp4` into the official `<split>/<scene>_generated.mp4` layout. It writes
-an immutable `staging.json` recording the source commit, license, zero local
-modifications, selected scene identities, and source paths. Staging uses
+an immutable `staging.json` recording the intended source commit and license,
+the unverified checkout state, selected scene identities, and source paths. Staging uses
 `ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count
 and FPS, plus the formal 128 × 128 output size recorded in the generation
 identity. It verifies the recorded video SHA-256 again before each scorer and
@@ -80,7 +80,9 @@ Run the same command with `score` and `--official-repo /path/to/Sana` to
 evaluate existing videos without regenerating them. The adapter pins the
 official checkout, rejects modified metric scripts, and calls the official
 VBench/revisit/temporal and Pi3 camera entry points. Their raw per-scene files
-remain under the method directory. It uses the official nine VBench dimensions,
+remain under the method directory. After complete scoring and a second checkout
+check, `scoring.json` records the verified commit and zero local modifications,
+bound to the staged inputs by SHA-256. It uses the official nine VBench dimensions,
 five revisit pairs per scene, 16 FPS reference, 10-second windows, and no
 first-frame skip for this unrefined model. Camera/Pi3 evaluation uses GPU, so
 run `stage` and validate video completeness on CPU before invoking `score`.
