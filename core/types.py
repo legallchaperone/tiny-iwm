@@ -149,9 +149,10 @@ class VideoBatch:
 class TrainingBatch:
     """Flow-matching inputs with explicit visibility and loss semantics.
 
-    Latent-like tensors use ``[B, C, T, H, W]``. ``flow_time`` is ``[B]`` or
-    ``[B, T]``; ``loss_mask`` and ``attention_visibility`` document rather than
-    imply which targets and attention edges are legal.
+    Latent-like tensors use ``[B, C, T, H, W]``. ``flow_time`` is ``[B]``;
+    optional ``model_time`` is ``[B, temporal_tokens]`` for clean-history
+    Stage B modulation. ``loss_mask`` and ``attention_visibility`` document
+    which targets and attention edges are legal.
     """
 
     noisy_latents: Any
@@ -162,6 +163,7 @@ class TrainingBatch:
     attention_visibility: Any
     layout: VideoLayout
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    model_time: Optional[Any] = None
 
 
 @dataclass(frozen=True)
