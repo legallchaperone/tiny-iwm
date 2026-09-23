@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "issue": "CWX-26",
+  "status": "passed",
+  "run_id": "stage-b-sekai-subset-seed21-v1",
+  "seed": 21,
+  "config_sha256": "9f71cb7e831c5b031019cd4015099e82d026ed7f05bfff9be8ef5c2027e2cdbb",
+  "manifest_sha256": "sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf",
+  "parent_checkpoint_id": "sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1",
+  "initial_checkpoint_id": "sha256:0d2ca6371b7d3678ebcc62aa3d87109bbc661e275ab62050eaca004a60a16ef7",
+  "selected_checkpoint": {
+    "path": "/stage-a/checkpoints/stage-b-best.pt",
+    "checkpoint_id": "sha256:b7c7b983649478644761570f6aca26a07fa4d86c1fa4be55538b45c00259a13f",
+    "step": 50,
+    "ema_flow_matching_mse": 2.8997395833333335,
+    "resume_verified": true
+  },
+  "training": {
+    "steps": 100,
+    "wall_seconds": 56.992651538,
+    "batch_size": 1,
+    "precision": "bfloat16",
+    "loss_trace": [
+      {"step": 1, "target_chunk": 8, "loss": 3.109375},
+      {"step": 10, "target_chunk": 16, "loss": 2.625},
+      {"step": 20, "target_chunk": 21, "loss": 1.96875},
+      {"step": 30, "target_chunk": 19, "loss": 1.578125},
+      {"step": 40, "target_chunk": 1, "loss": 1.7734375},
+      {"step": 50, "target_chunk": 27, "loss": 1.765625},
+      {"step": 60, "target_chunk": 22, "loss": 1.84375},
+      {"step": 70, "target_chunk": 30, "loss": 1.5546875},
+      {"step": 80, "target_chunk": 1, "loss": 1.71875},
+      {"step": 90, "target_chunk": 13, "loss": 1.6875},
+      {"step": 100, "target_chunk": 23, "loss": 1.8828125}
+    ]
+  },
+  "validation": [
+    {"step": 50, "ema_flow_matching_mse": 2.8997395833333335},
+    {"step": 100, "ema_flow_matching_mse": 2.8997395833333335}
+  ],
+  "cache_comparison": [
+    {"chunk": 0, "flow_time": 0.9, "max_abs_delta": 0.033203125},
+    {"chunk": 0, "flow_time": 0.5, "max_abs_delta": 0.04296875},
+    {"chunk": 1, "flow_time": 0.9, "max_abs_delta": 0.046875},
+    {"chunk": 1, "flow_time": 0.5, "max_abs_delta": 0.0390625},
+    {"chunk": 2, "flow_time": 0.9, "max_abs_delta": 0.04296875},
+    {"chunk": 2, "flow_time": 0.5, "max_abs_delta": 0.037109375}
+  ],
+  "cache_tolerance": {"absolute": 0.05, "relative": null, "dtype": "bfloat16"},
+  "leakage": {
+    "future_clean_max_abs_delta": 0.0,
+    "target_clean_fixed_noisy_max_abs_delta": 0.0,
+    "identical_input_repeat_max_abs_delta": 0.0,
+    "bf16_unfixed_noisy_max_abs_delta": 0.0078125,
+    "attention_backend": "math",
+    "tolerance": 0.05
+  },
+  "hardware": {"platform": "Modal", "gpu_request": "A10G", "device": "NVIDIA A10", "torch": "2.8.0+cu128"},
+  "cost_control": {"preflight_device": "cpu", "downloads_inside_gpu_function": false, "prepared_data_volume": "tiny-iwm-stage-a"},
+  "training_run_url": "https://modal.com/apps/cwx-80046/main/ap-M4xfQk3hqEYu0dPEf3URgX",
+  "verification_run_url": "https://modal.com/apps/cwx-80046/main/ap-7anpydaI6DlO5BE2cCLsQF",
+  "quality_note": "This 100-step Stage B baseline is a mechanics gate, not evidence of perceptual convergence."
+}

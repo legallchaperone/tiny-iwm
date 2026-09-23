@@ -1,0 +1,53 @@
+schema_version: 1
+run_id: stage-b-sekai-subset-seed21-v1
+issue: CWX-26
+seed: 21
+stage: B
+parent_run_id: stage-a-sekai-subset-seed21-v1
+parent_checkpoint_id: sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1
+initial_checkpoint: /stage-a/checkpoints/stage-b-init.pt
+initial_weights: stage_a_ema
+prepared_manifest_sha256: sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf
+source_revision: 4d965e94b9ea11b9c5ba085251ffa7a0345e006f
+model:
+  latent_channels: 128
+  hidden_size: 832
+  depth: 24
+  num_heads: 16
+  patch_size: [1, 2, 2]
+  mlp_ratio: 4.0
+  qkv_bias: true
+  prope_camera_dims: 48
+flow_matching:
+  convention: t0_clean_t1_noise
+  time_distribution: uniform
+  loss_weighting: uniform
+  history_model_time: 0
+  target_selection: uniform_nonempty_chunk
+  latent_frames_per_chunk: 4
+  df_timestep_mixture: false
+  self_rollout_loss: false
+optimization:
+  steps: 100
+  batch_size: 1
+  optimizer: AdamW
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  scheduler: constant
+  ema_decay: 0.9999
+validation:
+  steps: [50, 100]
+  weights: ema
+  deterministic_noise_seed: 26000
+  flow_time: 0.5
+  target_chunks: [1, 15, 30]
+  selection: lowest_validation_flow_matching_mse
+runtime:
+  platform: Modal
+  gpu: A10G
+  precision: bfloat16
+  prepared_volume: tiny-iwm-stage-a
+  data_downloads_inside_gpu_function: false
+checkpoint:
+  path: /stage-a/checkpoints/stage-b-best.pt
+  format: resumable_runtime_schema_v1
