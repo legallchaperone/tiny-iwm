@@ -52,9 +52,22 @@ def inspect_inputs() -> str:
     import torch
     import yaml
 
+    import sys
+
+    sys.path.insert(0, "/opt/tiny-iwm")
+    from core.temporal_config import resolve_temporal_protocol
+    from core.video_layout import CodecTemporalSpec
+    from scripts.prepared_stage_data import validate_prepared_record
+
     volume.reload()
     config = yaml.safe_load(CONFIG_PATH.read_text())
     manifest = json.loads(MANIFEST_PATH.read_text())
+    temporal = resolve_temporal_protocol(config)
+    layout = temporal.layout(
+        CodecTemporalSpec(8),
+        temporal_patch_size=int(config["model"]["patch_size"][0]),
+        purpose="train",
+    )
     if manifest["manifest_sha256"] != _manifest_id(manifest):
         raise ValueError("prepared manifest content failed SHA-256 verification")
     if manifest["manifest_sha256"] != config["prepared_manifest_sha256"]:
@@ -106,6 +119,7 @@ def inspect_inputs() -> str:
     del payload
     for split in ("train", "validation"):
         for record in manifest["splits"][split]:
+            validate_prepared_record(record, layout)
             prepared = Path(record["prepared_path"])
             if _file_id(prepared) != record["sha256"]:
                 raise ValueError(

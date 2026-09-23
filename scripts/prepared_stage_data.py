@@ -11,6 +11,28 @@ from core.camera import CameraCondition, IntrinsicsSpace
 from core.video_layout import VideoLayout
 
 
+def validate_prepared_record(record: dict[str, object], layout: VideoLayout) -> None:
+    """Validate manifest geometry without opening tensors or allocating a GPU."""
+    latent_shape = record.get("latent_shape")
+    camera_frames = record.get("camera_frames")
+    if (
+        not isinstance(latent_shape, list)
+        or len(latent_shape) != 4
+        or not all(isinstance(value, int) and value > 0 for value in latent_shape)
+    ):
+        raise ValueError("prepared record has no valid [C,T,H,W] latent_shape")
+    if latent_shape[1] < layout.latent_frame_count:
+        raise ValueError(
+            f"prepared source has {latent_shape[1]} latent frames, but layout requires "
+            f"{layout.latent_frame_count}"
+        )
+    if not isinstance(camera_frames, int) or camera_frames < layout.output_rgb_frame_count:
+        raise ValueError(
+            f"prepared source has {camera_frames!r} camera frames, but layout requires "
+            f"{layout.output_rgb_frame_count}"
+        )
+
+
 def load_prepared_sample(
     record: dict[str, object],
     *,
@@ -18,6 +40,7 @@ def load_prepared_sample(
     dtype: torch.dtype,
     layout: VideoLayout,
 ) -> tuple[torch.Tensor, CameraCondition, TokenCameraProjection]:
+    validate_prepared_record(record, layout)
     arrays = np.load(str(record["prepared_path"]), allow_pickle=False)
     latent_frames = layout.latent_frame_count
     rgb_frames = layout.output_rgb_frame_count
