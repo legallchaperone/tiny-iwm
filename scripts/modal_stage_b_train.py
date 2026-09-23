@@ -35,6 +35,14 @@ def _file_id(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def _manifest_id(manifest: dict) -> str:
+    content = {
+        key: value for key, value in manifest.items() if key != "manifest_sha256"
+    }
+    canonical = json.dumps(content, sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
 @app.function(
     image=image, volumes={str(VOLUME_ROOT): volume}, cpu=2, memory=8192, timeout=600
 )
@@ -46,6 +54,8 @@ def inspect_inputs() -> str:
     volume.reload()
     config = yaml.safe_load(CONFIG_PATH.read_text())
     manifest = json.loads(MANIFEST_PATH.read_text())
+    if manifest["manifest_sha256"] != _manifest_id(manifest):
+        raise ValueError("prepared manifest content failed SHA-256 verification")
     if manifest["manifest_sha256"] != config["prepared_manifest_sha256"]:
         raise ValueError(
             "Stage B manifest identity differs from the pinned Stage A data"
@@ -153,6 +163,8 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         Path("configurations/runs/stage_b_baseline.yaml").read_text()
     )
     manifest = json.loads(MANIFEST_PATH.read_text())
+    if manifest["manifest_sha256"] != _manifest_id(manifest):
+        raise ValueError("prepared manifest content failed SHA-256 verification")
     if (
         hashlib.sha256(CONFIG_PATH.read_bytes()).hexdigest()
         != preflight["config_sha256"]
@@ -392,6 +404,8 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         scheduler=scheduler,
         ema=ema,
     )
+    if selected.provenance != provenance.snapshot():
+        raise ValueError("selected Stage B checkpoint provenance differs from this run")
     if verify_only:
         best_step = selected.global_step
         best_metric = None
