@@ -51,6 +51,7 @@ def test_centered_spectrum_norms_and_cka_have_declared_axes():
     wider = torch.cat((matrix, matrix), dim=1)
     assert compare_features(matrix, wider)["centered_linear_cka"] == pytest.approx(1)
     assert compare_features(matrix, wider)["mean_row_cosine"] is None
+    assert describe_features(torch.tensor([[1.0], [3.0]]))["norm"]["median"] == 2.0
 
 
 def test_controlled_history_alignment_keeps_rollout_and_fm_time_separate(tmp_path):
@@ -77,6 +78,23 @@ def test_controlled_history_alignment_keeps_rollout_and_fm_time_separate(tmp_pat
     )
     assert "flow_time" in alignment["fixed_fields"]
     assert "rollout_time" in alignment["fixed_fields"]
+
+
+def test_history_alignment_keeps_model_provenance_separate(tmp_path):
+    for scene in ("a", "b", "c", "d"):
+        for purpose in ("controlled_gt_history", "controlled_generated_history"):
+            _write(tmp_path, purpose, 8, scene, [1.0, float(ord(scene))])
+            if scene in ("c", "d"):
+                path = tmp_path / f"{purpose}-8-{scene}.json"
+                record = json.loads(path.read_text())
+                record.update(
+                    checkpoint_id="other", config_id="other", training_seed=22
+                )
+                path.write_text(json.dumps(record))
+    groups = history_alignment(tmp_path)["per_group"]
+    assert len(groups) == 2
+    assert {item["checkpoint_id"] for item in groups} == {"checkpoint", "other"}
+    assert all(item["matched_observations"] == 2 for item in groups)
 
 
 def test_mismatched_capture_coordinates_are_rejected():

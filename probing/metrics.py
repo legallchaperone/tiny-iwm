@@ -12,6 +12,9 @@ import torch
 
 
 GROUP_FIELDS = (
+    "checkpoint_id",
+    "config_id",
+    "training_seed",
     "layer",
     "observation_point",
     "token_type",
@@ -35,6 +38,9 @@ PAIR_FIELDS = (
 CONTROLLED_FIELDS = PAIR_FIELDS + ("checkpoint_id", "config_id", "training_seed")
 VARIANT_FIELDS = PAIR_FIELDS + ("forward_purpose",)
 ALIGNMENT_GROUP_FIELDS = (
+    "checkpoint_id",
+    "config_id",
+    "training_seed",
     "layer",
     "observation_point",
     "token_type",
@@ -96,7 +102,7 @@ def describe_features(matrix: torch.Tensor) -> dict:
         "norm": {
             "mean": float(norms.mean()),
             "minimum": float(norms.min()),
-            "median": float(norms.median()),
+            "median": float(torch.quantile(norms, 0.5)),
             "p95": float(torch.quantile(norms, 0.95)),
             "maximum": float(norms.max()),
         },
