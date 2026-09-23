@@ -39,16 +39,53 @@ def _fixture(tmp_path):
         latent_chunk_size=4,
         initial_condition_frames=1,
     )
+    backend = {
+        "device_name": "NVIDIA A10G",
+        "compute_capability": "8.6",
+        "cuda_runtime": "12.8",
+        "cudnn_version": 91002,
+    }
     for row in rows:
         identity = generation_identity(
             selection,
             row,
             checkpoint_id="sha256:" + "c" * 64,
             weight_flavor="ema",
+            model_config={
+                "latent_channels": 128,
+                "hidden_size": 832,
+                "depth": 24,
+                "num_heads": 16,
+                "patch_size": [1, 2, 2],
+                "mlp_ratio": 4.0,
+                "qkv_bias": True,
+                "prope_camera_dims": 48,
+            },
             codec_id="codec",
+            codec_fingerprint={
+                "weights_sha256": "sha256:" + "d" * 64,
+                "normalization_sha256": "sha256:" + "e" * 64,
+                "encoding_policy": "bidirectional_mode_v1",
+                "implementation_revision": "diffusers:0.37.0",
+                "execution_dtype": "bfloat16",
+                "execution_backend": "cuda",
+                "backend_fingerprint": backend,
+                "cuda_math_policy": "strict_no_tf32",
+            },
             spatial_resolution=(704, 1280),
             preprocessing_id="crop-v1",
             rollout_layout=layout,
+            conditioning={"camera": {"enabled": False}, "text": {"enabled": False}},
+            implementation_id="test-implementation",
+            numeric_execution={
+                "parameter_dtype": "float32",
+                "autocast_dtype": "bfloat16",
+                "latent_dtype": "bfloat16",
+                "attention_backend": "math",
+                "torch_version": "2.8.0",
+                "tf32_enabled": False,
+                "backend_fingerprint": backend,
+            },
             sampler={
                 "solver": "euler",
                 "steps": 25,
