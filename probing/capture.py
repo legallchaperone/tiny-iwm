@@ -83,8 +83,10 @@ class FeatureRecorder:
         self.max_records = max_records
         self.raw_points = raw_points
         self.max_raw_bytes = max_raw_bytes
-        self.record_count = 0
-        self.raw_bytes = 0
+        self.record_count = len(list(root.glob("*.json")))
+        self.raw_bytes = sum(path.stat().st_size for path in root.glob("*.pt"))
+        if self.record_count > max_records or self.raw_bytes > max_raw_bytes:
+            raise ValueError("existing feature storage exceeds capture bounds")
 
     def record(
         self, context: CaptureContext, observations: dict[str, torch.Tensor]
@@ -107,6 +109,7 @@ class FeatureRecorder:
                     values[0, token.index]
                     .detach()
                     .to(device="cpu", dtype=torch.float32)
+                    .clone()
                 )
                 if not torch.isfinite(feature).all():
                     raise ValueError("non-finite captured feature")
@@ -140,30 +143,36 @@ class FeatureRecorder:
                     json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
                 ).hexdigest()
                 if point in self.raw_points:
-                    size = feature.numel() * feature.element_size()
-                    if self.raw_bytes + size > self.max_raw_bytes:
-                        raise ValueError("raw feature byte budget exceeded")
                     payload["raw_file"] = f"{event_id}.pt"
-                    self._write_once(self.root / payload["raw_file"], feature)
-                    self.raw_bytes += size
+                    self.raw_bytes += self._write_once(
+                        self.root / payload["raw_file"],
+                        feature,
+                        max_bytes=self.max_raw_bytes - self.raw_bytes,
+                    )
                 self._write_once(self.root / f"{event_id}.json", payload)
                 self.record_count += 1
 
     @staticmethod
-    def _write_once(path: Path, value: object) -> None:
+    def _write_once(path: Path, value: object, *, max_bytes: int | None = None) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
-            temporary = Path(handle.name)
-            if path.suffix == ".json":
-                handle.write(
-                    json.dumps(value, sort_keys=True, indent=2).encode() + b"\n"
-                )
-            else:
-                torch.save(value, handle)
+        temporary = None
         try:
+            with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+                temporary = Path(handle.name)
+                if path.suffix == ".json":
+                    handle.write(
+                        json.dumps(value, sort_keys=True, indent=2).encode() + b"\n"
+                    )
+                else:
+                    torch.save(value, handle)
+            size = temporary.stat().st_size
+            if max_bytes is not None and size > max_bytes:
+                raise ValueError("raw feature byte budget exceeded")
             os.link(temporary, path)
+            return size
         finally:
-            temporary.unlink(missing_ok=True)
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
 
 def capture_forward(

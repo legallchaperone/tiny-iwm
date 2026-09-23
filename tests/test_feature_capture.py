@@ -49,7 +49,7 @@ def test_observational_capture_preserves_output_rng_and_bounds_storage(tmp_path)
         ),
         max_records=1,
         raw_points=frozenset({"blocks.0.post_attention"}),
-        max_raw_bytes=24 * 4,
+        max_raw_bytes=4096,
     )
     actual = capture_forward(
         model, latents, time, context=_context(), recorder=recorder
@@ -70,7 +70,8 @@ def test_observational_capture_preserves_output_rng_and_bounds_storage(tmp_path)
     ) == ("scene-1", 42, 8, 0.5, "history", "conditional", "denoise")
     raw = torch.load(tmp_path / record["raw_file"], weights_only=True)
     assert raw.shape == (24,)
-    assert recorder.raw_bytes == 24 * 4
+    assert raw.untyped_storage().nbytes() == 24 * 4
+    assert recorder.raw_bytes == (tmp_path / record["raw_file"]).stat().st_size
     with pytest.raises(ValueError, match="record budget"):
         capture_forward(model, latents, time, context=_context(), recorder=recorder)
 
@@ -123,7 +124,7 @@ def test_capture_detaches_records_but_keeps_model_gradient(tmp_path):
         tokens=(TokenSelection(0, "target", {"time_seconds": 0.0}),),
         max_records=1,
         raw_points=frozenset({"blocks.1.block_output"}),
-        max_raw_bytes=24 * 4,
+        max_raw_bytes=4096,
     )
     output = capture_forward(
         model, latents, torch.tensor([0.5]), context=_context(), recorder=recorder
@@ -135,3 +136,19 @@ def test_capture_detaches_records_but_keeps_model_gradient(tmp_path):
     assert not torch.load(
         tmp_path / record["raw_file"], weights_only=True
     ).requires_grad
+
+
+def test_failed_serialization_cleans_temporary_file(tmp_path, monkeypatch):
+    def fail_save(*args, **kwargs):
+        raise OSError("volume full")
+
+    monkeypatch.setattr("probing.capture.torch.save", fail_save)
+    with pytest.raises(OSError, match="volume full"):
+        FeatureRecorder._write_once(tmp_path / "raw.pt", torch.ones(2))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_existing_files_count_toward_new_recorder_budget(tmp_path):
+    (tmp_path / "existing.json").write_text("{}")
+    with pytest.raises(ValueError, match="existing feature storage"):
+        FeatureRecorder(tmp_path, max_records=0)
