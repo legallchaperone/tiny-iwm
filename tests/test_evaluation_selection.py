@@ -23,6 +23,8 @@ def _identity(selection, row, **overrides):
         "checkpoint_id": "sha256:" + "a" * 64,
         "weight_flavor": "ema",
         "codec_id": "LTX2VAE_diffusers_704x1280_official_latent_cache",
+        "spatial_resolution": (704, 1280),
+        "preprocessing_id": "official_center_crop_v1",
         "sampler": {
             "solver": "euler",
             "steps": 25,
@@ -69,6 +71,8 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(selection, row, checkpoint_id="sha256:" + "b" * 64),
         _identity(selection, row, weight_flavor="model"),
         _identity(selection, row, codec_id="other-codec"),
+        _identity(selection, row, spatial_resolution=(128, 128)),
+        _identity(selection, row, preprocessing_id="other-crop"),
         _identity(
             selection,
             row,
@@ -81,7 +85,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 6
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 8
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)
@@ -105,3 +109,14 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
     write_immutable(path, selection)
     with pytest.raises(FileExistsError, match="immutable selection"):
         write_immutable(path, changed_selection)
+
+
+def test_identical_concurrent_claim_is_idempotent(tmp_path, monkeypatch):
+    def another_worker_wins(source, destination):
+        destination.write_bytes(source.read_bytes())
+        raise FileExistsError(destination)
+
+    monkeypatch.setattr("evaluation.selection.os.link", another_worker_wins)
+    path = tmp_path / "selection.json"
+    write_immutable(path, _selection())
+    assert json.loads(path.read_text()) == _selection()

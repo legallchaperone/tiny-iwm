@@ -15,6 +15,8 @@ def generation_identity(
     checkpoint_id: str,
     weight_flavor: str,
     codec_id: str,
+    spatial_resolution: tuple[int, int],
+    preprocessing_id: str,
     sampler: dict,
 ) -> dict:
     """Hash every input that can change a generated trajectory."""
@@ -34,8 +36,12 @@ def generation_identity(
         raise ValueError("checkpoint_id must be a SHA-256 digest")
     if weight_flavor not in {"model", "ema"}:
         raise ValueError("weight_flavor must be model or ema")
-    if not codec_id or not sampler:
-        raise ValueError("codec and sampler must be explicit")
+    if not codec_id or not preprocessing_id or not sampler:
+        raise ValueError("codec, preprocessing, and sampler must be explicit")
+    if len(spatial_resolution) != 2 or any(
+        type(value) is not int or value <= 0 for value in spatial_resolution
+    ):
+        raise ValueError("spatial resolution must be positive integer height and width")
     required_sampler = {"solver", "steps", "cfg_scale", "history_policy"}
     if not required_sampler <= sampler.keys():
         raise ValueError("sampler must identify solver, steps, CFG, and history policy")
@@ -49,6 +55,8 @@ def generation_identity(
         "checkpoint_id": checkpoint_id,
         "weight_flavor": weight_flavor,
         "codec_id": codec_id,
+        "spatial_resolution": list(spatial_resolution),
+        "preprocessing_id": preprocessing_id,
         "conditions_sha256": row["conditions_sha256"],
         "sampler": sampler,
     }

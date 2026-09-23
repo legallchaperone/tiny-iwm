@@ -222,7 +222,13 @@ def write_immutable(path: Path, value: dict) -> None:
         temporary = Path(handle.name)
         handle.write(data)
     try:
-        os.link(temporary, path)
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            if path.read_bytes() != data:
+                raise FileExistsError(
+                    f"immutable selection already exists with different content: {path}"
+                ) from None
     finally:
         temporary.unlink(missing_ok=True)
 
