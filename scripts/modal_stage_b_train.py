@@ -232,12 +232,11 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     if resumed.checkpoint_id != preflight["initial_checkpoint_id"]:
         raise ValueError("Stage B checkpoint identity changed after preflight")
 
-    layout = VideoLayout.from_codec(
-        fps=16,
-        rgb_frame_count=961,
-        codec=CodecTemporalSpec(8),
-        latent_chunk_size=config["flow_matching"]["latent_frames_per_chunk"],
-        initial_condition_frames=1,
+    from core.temporal_config import resolve_temporal_protocol
+
+    temporal = resolve_temporal_protocol(config)
+    layout = temporal.layout(
+        CodecTemporalSpec(8), temporal_patch_size=model.config.patch_size[0], purpose="train"
     )
     flow_spec = FlowMatchSpec()
     builder = StageBBatchBuilder(flow_spec)

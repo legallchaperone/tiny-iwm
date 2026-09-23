@@ -1,0 +1,6 @@
+rgb_frames: 81
+history_policy: full
+solver: euler
+sampling_steps: 4
+cfg_scale: null
+seed: 0

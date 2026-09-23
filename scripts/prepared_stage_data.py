@@ -19,16 +19,20 @@ def load_prepared_sample(
     layout: VideoLayout,
 ) -> tuple[torch.Tensor, CameraCondition, TokenCameraProjection]:
     arrays = np.load(str(record["prepared_path"]), allow_pickle=False)
-    clean = torch.from_numpy(arrays["z"]).unsqueeze(0).to(device=device, dtype=dtype)
+    latent_frames = layout.latent_frame_count
+    rgb_frames = layout.output_rgb_frame_count
+    if arrays["z"].shape[1] < latent_frames or arrays["pose"].shape[0] < rgb_frames:
+        raise ValueError("prepared source is shorter than the resolved VideoLayout")
+    clean = torch.from_numpy(arrays["z"][:, :latent_frames]).unsqueeze(0).to(device=device, dtype=dtype)
     c2w = (
-        torch.from_numpy(arrays["pose"])
+        torch.from_numpy(arrays["pose"][:rgb_frames])
         .unsqueeze(0)
         .to(device=device, dtype=torch.float32)
     )
-    values = torch.from_numpy(arrays["intrinsics"]).to(
+    values = torch.from_numpy(arrays["intrinsics"][:rgb_frames]).to(
         device=device, dtype=torch.float32
     )
-    k = torch.zeros((961, 3, 3), device=device, dtype=torch.float32)
+    k = torch.zeros((rgb_frames, 3, 3), device=device, dtype=torch.float32)
     k[:, 0, 0] = values[:, 0] * (1280 / 1920)
     k[:, 1, 1] = values[:, 1] * (720 / 1080)
     k[:, 0, 2] = values[:, 2] * (1280 / 1920) - 576
@@ -37,7 +41,7 @@ def load_prepared_sample(
     camera = CameraCondition(
         c2w=c2w,
         intrinsics=k.unsqueeze(0),
-        timestamps_seconds=(torch.arange(961, device=device)[None] / 16),
+        timestamps_seconds=(torch.arange(rgb_frames, device=device)[None] / layout.fps),
         intrinsics_space=IntrinsicsSpace.RGB_PIXELS,
         preprocessing=(
             "resize_rgb:1080x1920->720x1280",
@@ -46,7 +50,7 @@ def load_prepared_sample(
         ),
     )
     projection = build_token_camera_projection(
-        camera, layout, grid_shape=(121, 2, 2), image_size=(128, 128)
+        camera, layout, grid_shape=(latent_frames, 2, 2), image_size=(128, 128)
     )
     projection = TokenCameraProjection(
         projection.projection.to(dtype),

@@ -1,6 +1,4 @@
 rgb_frames: 961
-fps: 16
-duration_seconds: 60
 history_policy: full
 solver: euler
 sampling_steps: 16

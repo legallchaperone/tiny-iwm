@@ -21,6 +21,17 @@ The command validates random DiT initialization and mutually exclusive
 `checkpoint.init_from` / `checkpoint.resume_from` settings, then writes
 `resolved_config.yaml` and `provenance.json` with W&B disabled by default.
 
+## Temporal contract
+
+Temporal geometry has exactly five inputs: `train.window_rgb_frames`,
+`temporal.chunk_latent_frames`, `rollout.rgb_frames`,
+`temporal.initial_condition_rgb_frames`, and `temporal.fps`. Codec padding,
+latent/token/chunk ranges, and physical duration are derived by `VideoLayout`;
+do not repeat FPS, frame counts, or duration in dataset/stage configuration.
+The default uses a 161-frame training window and the named `rollout/minute`
+961-frame preset. Select `rollout=debug_81` for short debugging. Only the
+961-frame, 16 FPS preset is eligible for the formal minute evaluation gate.
+
 All configurations are automatically saved in wandb run.
 
 ---

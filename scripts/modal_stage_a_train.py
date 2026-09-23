@@ -210,6 +210,7 @@ def train(manifest_json: str) -> str:
     from core.camera import CameraCondition
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
+    from core.temporal_config import resolve_temporal_protocol
     from scripts.prepared_stage_data import load_prepared_sample
     from runtime import (
         CheckpointProvenance,
@@ -255,12 +256,9 @@ def train(manifest_json: str) -> str:
     ema = ExponentialMovingAverage(model, 0.9999)
     flow_spec = FlowMatchSpec()
     builder = StageABatchBuilder(flow_spec)
-    layout = VideoLayout.from_codec(
-        fps=16,
-        rgb_frame_count=961,
-        codec=CodecTemporalSpec(8),
-        temporal_patch_size=1,
-        initial_condition_frames=1,
+    temporal = resolve_temporal_protocol(resolved_config)
+    layout = temporal.layout(
+        CodecTemporalSpec(8), temporal_patch_size=model_config.patch_size[0], purpose="train"
     )
 
     train_records = manifest["splits"]["train"]

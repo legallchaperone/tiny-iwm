@@ -142,15 +142,17 @@ class VideoLayout:
         stride = codec.temporal_compression
         if codec.first_frame_is_independent:
             compressed_count = ceil(max(0, rgb_frame_count - 1) / stride)
-            latent_count = 1 + compressed_count
-            padded_rgb_count = 1 + compressed_count * stride
+            requested_latent_count = 1 + compressed_count
+            latent_count = ceil(requested_latent_count / temporal_patch_size) * temporal_patch_size
+            padded_rgb_count = 1 + (latent_count - 1) * stride
             latent_ranges = [FrameRange(0, 1)]
             latent_ranges.extend(
                 FrameRange(1 + index * stride, 1 + (index + 1) * stride)
-                for index in range(compressed_count)
+                for index in range(latent_count - 1)
             )
         else:
-            latent_count = ceil(rgb_frame_count / stride)
+            requested_latent_count = ceil(rgb_frame_count / stride)
+            latent_count = ceil(requested_latent_count / temporal_patch_size) * temporal_patch_size
             padded_rgb_count = latent_count * stride
             latent_ranges = [
                 FrameRange(index * stride, (index + 1) * stride)
