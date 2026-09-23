@@ -61,3 +61,21 @@ persisted checkpoint. It restores the complete training state, applies EMA
 weights, executes the full 961-frame shape, generates an eight-second latent
 sample, and compares the real camera trajectory with a frozen-camera
 counterfactual. The report keeps quality limitations explicit.
+
+## Stage B baseline
+
+`modal run scripts/modal_stage_b_train.py::inspect_inputs` checks the pinned
+manifest, prepared files, and Stage B initialization checkpoint on CPU. The
+CWX-26 initialization uses Stage A's trained model weights; its source and
+checkpoint hash are pinned in `artifacts/m4/cwx-26-stage-b-initialization.json`.
+To run
+the bounded 100-step training and correctness gate, use
+`modal run scripts/modal_stage_b_train.py::main`. The local entrypoint performs the
+CPU check before allocating one A10G. The GPU function reads only the existing
+`tiny-iwm-stage-a` Volume, keeps trainable parameters and EMA in FP32 while
+using BF16 autocast for compute, selects trained model weights by held-out FM loss, then
+checks clean-target/future leakage and multi-chunk cached/reference equivalence.
+
+`modal run scripts/modal_stage_b_train.py::verify` reruns only the correctness
+gate against the selected checkpoint. It does not repeat training. The recorded
+results and checkpoint identity are in `artifacts/m4/cwx-26-stage-b-gate.json`.

@@ -1,6 +1,9 @@
 """Clean-history KV lifecycle for reference and cached chunk inference."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -9,6 +12,9 @@ from algorithms.world_model.models.dit import JointVideoDiT
 from algorithms.world_model.models.prope import TokenCameraProjection
 from algorithms.world_model.training_batch import ChunkCausalVisibility
 from core.video_layout import VideoLayout
+
+if TYPE_CHECKING:
+    from probing.capture import CaptureContext, FeatureRecorder
 
 
 @dataclass(frozen=True)
@@ -73,7 +79,7 @@ class HistorySession:
         if chunk.ndim != 5 or chunk.shape[1] != self.model.config.latent_channels:
             raise ValueError("chunk must have model-compatible [B, C, T, H, W] shape")
         expected = self.layout.latent_range_for_chunk(chunk_index)
-        start_latent = self._prefix_latents if chunk_index == 0 else expected.start
+        start_latent = max(self._prefix_latents, expected.start)
         if chunk.shape[2] != expected.stop - start_latent:
             raise ValueError("chunk latent length does not match VideoLayout")
         patch_time, patch_height, patch_width = self.model.config.patch_size
@@ -129,8 +135,9 @@ class HistorySession:
         )
         self._spatial_tokens = spatial
         self._prefix_latents = prefix_count
-        if prefix_count == self.layout.chunk_to_latent[0].stop:
-            self._next_chunk = 1
+        self._next_chunk = sum(
+            chunk.stop <= prefix_count for chunk in self.layout.chunk_to_latent
+        )
 
     def _camera(self, start: int, stop: int) -> TokenCameraProjection | None:
         if self.camera_projection is None:
@@ -151,6 +158,8 @@ class HistorySession:
         flow_time: torch.Tensor,
         *,
         mode: str = "cached",
+        recorder: FeatureRecorder | None = None,
+        context: CaptureContext | None = None,
     ) -> torch.Tensor:
         """Predict target velocity without admitting its temporary KV to history."""
         start, stop = self._check(identity, noisy_chunk, chunk_index)
@@ -161,6 +170,8 @@ class HistorySession:
         ):
             raise ValueError("flow_time must be finite within [0, 1]")
         if mode == "cached":
+            if recorder is not None:
+                raise ValueError("feature capture for replay requires reference mode")
             token_time = flow_time[:, None].expand(-1, stop - start)
             spatial = (noisy_chunk.shape[3] // self.model.config.patch_size[1]) * (
                 noisy_chunk.shape[4] // self.model.config.patch_size[2]
@@ -185,12 +196,27 @@ class HistorySession:
             noisy_chunk.shape[4] // self.model.config.patch_size[2]
         )
         mask = self.visibility.materialize(spatial_tokens_per_temporal_token=spatial)
-        output = self.model(
-            full,
-            token_time,
-            visibility_mask=mask[:stop, :stop],
-            camera_projection=self._camera(0, stop),
-        )
+        if recorder is None:
+            output = self.model(
+                full,
+                token_time,
+                visibility_mask=mask[:stop, :stop],
+                camera_projection=self._camera(0, stop),
+            )
+        else:
+            if context is None:
+                raise ValueError("captured replay requires a capture context")
+            from probing.capture import capture_forward
+
+            output = capture_forward(
+                self.model,
+                full,
+                token_time,
+                context=context,
+                recorder=recorder,
+                visibility_mask=mask[:stop, :stop],
+                camera_projection=self._camera(0, stop),
+            )
         return output[:, :, -noisy_chunk.shape[2] :]
 
     @torch.no_grad()

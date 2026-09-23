@@ -53,6 +53,27 @@ def _one_step(model, optimizer, scheduler, ema):
     ema.update(model)
 
 
+def test_bf16_model_ema_accumulates_small_updates_in_fp32():
+    model = nn.Linear(1, 1, bias=False).to(dtype=torch.bfloat16)
+    with torch.no_grad():
+        model.weight.fill_(1)
+    ema = ExponentialMovingAverage(model, 0.9999)
+    with torch.no_grad():
+        model.weight.fill_(2)
+    ema.update(model)
+    assert ema.shadow["weight"].dtype is torch.float32
+    assert float(ema.shadow["weight"][0, 0]) > 1.00005
+
+
+def test_float64_model_ema_keeps_double_precision():
+    model = nn.Linear(1, 1, bias=False).to(dtype=torch.float64)
+    with torch.no_grad():
+        model.weight.fill_(1.0 + 1e-12)
+    ema = ExponentialMovingAverage(model, 0.0)
+    assert ema.shadow["weight"].dtype is torch.float64
+    assert float(ema.shadow["weight"][0, 0]) == 1.0 + 1e-12
+
+
 def test_checkpoint_selection_rejects_ambiguous_lifecycle():
     with pytest.raises(ValueError, match="mutually exclusive"):
         CheckpointSelection(init_from="stage-a.pt", resume_from="same-run.pt")
@@ -163,10 +184,14 @@ def test_init_from_loads_only_selected_weights_and_resets_training_state(
         ema_decay=0.95,
         source_weights=source_weights,
     )
-    expected = source.state_dict() if source_weights == "model" else {
-        **source.state_dict(),
-        **source_ema.shadow,
-    }
+    expected = (
+        source.state_dict()
+        if source_weights == "model"
+        else {
+            **source.state_dict(),
+            **source_ema.shadow,
+        }
+    )
     assert initialized.global_step == 0 and initialized.epoch == 0
     assert initialized.parent_checkpoint_id == checkpoint_id
     assert initialized.ema_rule == "copy_loaded_model"
@@ -218,8 +243,14 @@ def test_stage_transition_accepts_subset_compatibility(tmp_path):
     optimizer, scheduler, ema = _runtime(source)
     path = tmp_path / "stage-a.pt"
     save_checkpoint(
-        path, model=source, optimizer=optimizer, scheduler=scheduler, ema=ema,
-        global_step=4, epoch=1, provenance=_provenance(),
+        path,
+        model=source,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        ema=ema,
+        global_step=4,
+        epoch=1,
+        provenance=_provenance(),
     )
     target = _model()
     initialized = initialize_new_stage(
