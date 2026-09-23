@@ -44,3 +44,34 @@ The shared `rollout_latents` enforces this policy when it is passed from the
 generation identity's sampler.
 Each row is generated alone (`batch_size: 1`) so its seeded noise stream does
 not depend on batch position or size.
+
+## Official metric adapter
+
+`evaluation.official` wraps Sana's unchanged metric entry points at commit
+`f9178744c096dcf2a2ea773da183e341bcbeb044` (Apache-2.0). No official
+source is vendored or modified. Keep that checkout and the benchmark release
+separate from model training and generation; install the upstream evaluation
+dependencies in a scoring environment only.
+
+The `stage` command verifies the frozen metadata and each `identity.json`,
+requires a single compatible run identity across scenes, then links each
+`video.mp4` into the official `<split>/<scene>_generated.mp4` layout. It writes
+an immutable `staging.json` recording the source commit, license, zero local
+modifications, selected scene identities, and source paths. For example:
+
+```bash
+python -m evaluation.official stage \
+  --selection data/manifests/sana_wm_eval_subset_v1.json \
+  --benchmark-root /path/to/SANA-WM-Bench \
+  --outputs-root /path/to/identity-outputs \
+  --method-dir /path/to/evaluation-method --seed 42
+```
+
+Run the same command with `score` and `--official-repo /path/to/Sana` to
+evaluate existing videos without regenerating them. The adapter pins the
+official checkout, rejects modified metric scripts, and calls the official
+VBench/revisit/temporal and Pi3 camera entry points. Their raw per-scene files
+remain under the method directory. It uses the official nine VBench dimensions,
+five revisit pairs per scene, 16 FPS reference, 10-second windows, and no
+first-frame skip for this unrefined model. Camera/Pi3 evaluation uses GPU, so
+run `stage` and validate video completeness on CPU before invoking `score`.
