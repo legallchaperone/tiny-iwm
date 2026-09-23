@@ -615,10 +615,23 @@ def score_official(
             official_repo, benchmark_root, method_dir, split
         )
         split_videos = [row for row in staged["staged"] if row["split"] == split]
+        expected_videos = {Path(row["official_video"]).name for row in split_videos}
+
+        def verify_video_set() -> None:
+            actual = {
+                path.name for path in (method_dir / split).glob("*_generated.mp4")
+            }
+            if actual != expected_videos:
+                raise ValueError(
+                    f"official video set differs from staged selection: {split}"
+                )
+
         for command in (camera, metric):
+            verify_video_set()
             for row in split_videos:
                 verify_staged_video(row, "before")
             subprocess.run(command, cwd=official_repo, check=True)
+            verify_video_set()
             for row in split_videos:
                 verify_staged_video(row, "during")
         _verify_scored_split(

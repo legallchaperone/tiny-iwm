@@ -557,6 +557,20 @@ def test_scoring_rechecks_staged_link_after_metric(tmp_path, monkeypatch):
         score_official(*paths, tmp_path / "Sana", seed=42)
 
 
+def test_scoring_rechecks_generated_video_set_after_metric(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+
+    def run(command, **kwargs):
+        (paths[3] / "simple_60s/extra_generated.mp4").write_bytes(b"extra")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(ValueError, match="official video set differs"):
+        score_official(*paths, tmp_path / "Sana", seed=42)
+
+
 def test_failed_rescore_removes_previous_completion_record(tmp_path, monkeypatch):
     paths = _fixture(tmp_path)
     (tmp_path / "Sana").mkdir()
