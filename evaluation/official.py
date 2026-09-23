@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -601,6 +602,11 @@ def score_official(
         if row["generation_seed"] == seed
     ]
     (method_dir / "scoring.json").unlink(missing_ok=True)
+    for split in {row["split"] for row in staged["staged"]}:
+        (method_dir / split / "eval_poses.json").unlink(missing_ok=True)
+        metrics_root = method_dir / "eval" / split
+        if metrics_root.is_dir():
+            shutil.rmtree(metrics_root)
 
     def verify_staged_video(row: dict, phase: str) -> None:
         source = Path(row["source_video"])

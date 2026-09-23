@@ -590,6 +590,28 @@ def test_failed_rescore_removes_previous_completion_record(tmp_path, monkeypatch
     assert not (paths[3] / "scoring.json").exists()
 
 
+def test_rescore_removes_previous_metric_outputs(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    poses = paths[3] / "simple_60s/eval_poses.json"
+    poses.parent.mkdir(parents=True)
+    poses.write_text("old poses")
+    summary = paths[3] / "eval/simple_60s/summary.json"
+    summary.parent.mkdir(parents=True)
+    summary.write_text("old summary")
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("scorer failed")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", fail)
+    with pytest.raises(RuntimeError, match="scorer failed"):
+        score_official(*paths, tmp_path / "Sana", seed=42)
+    assert not poses.exists()
+    assert not summary.exists()
+
+
 def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
     calls = []
 
