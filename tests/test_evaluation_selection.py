@@ -264,6 +264,18 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
         )
     with pytest.raises(ValueError, match="single-row noise streams"):
         _identity(selection, row, sampler={**identity["sampler"], "batch_size": 2})
+    with pytest.raises(ValueError, match="one source-image frame"):
+        _identity(
+            selection,
+            row,
+            rollout_layout=VideoLayout.from_codec(
+                fps=16,
+                rgb_frame_count=961,
+                codec=CodecTemporalSpec(8),
+                latent_chunk_size=4,
+                initial_condition_frames=9,
+            ),
+        )
     changed_selection = dict(selection)
     changed_selection["dataset_revision"] = "0" * 40
     with pytest.raises(ValueError, match="selection content differs"):

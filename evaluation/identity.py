@@ -171,6 +171,11 @@ def generation_identity(
         or rollout_layout.fps != row["fps"]
     ):
         raise ValueError("rollout layout differs from the selected official trajectory")
+    if (
+        rollout_layout.initial_condition_rgb.start != 0
+        or rollout_layout.initial_condition_rgb.stop != 1
+    ):
+        raise ValueError("official evaluation requires one source-image frame")
     layout_identity = {
         "rgb_frame_count": rollout_layout.rgb_frame_count,
         "valid_rgb_frame_count": rollout_layout.valid_rgb_frame_count,
