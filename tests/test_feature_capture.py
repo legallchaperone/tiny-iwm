@@ -176,3 +176,33 @@ def test_separate_recorders_share_one_storage_budget(tmp_path):
             recorder=second,
         )
     assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+def test_failed_metadata_publication_removes_raw_tensor(tmp_path, monkeypatch):
+    original = FeatureRecorder._write_once
+
+    def fail_metadata(path, value, **kwargs):
+        if path.suffix == ".json":
+            raise OSError("metadata write failed")
+        return original(path, value, **kwargs)
+
+    monkeypatch.setattr(FeatureRecorder, "_write_once", staticmethod(fail_metadata))
+    recorder = FeatureRecorder(
+        tmp_path,
+        points=("final_norm",),
+        tokens=(TokenSelection(0, "target", {"time_seconds": 0.25}),),
+        max_records=1,
+        raw_points=frozenset({"final_norm"}),
+        max_raw_bytes=4096,
+    )
+    with pytest.raises(OSError, match="metadata write failed"):
+        capture_forward(
+            _model(),
+            torch.randn(1, 4, 2, 4, 4),
+            torch.tensor([0.5]),
+            context=_context(),
+            recorder=recorder,
+        )
+    assert recorder.raw_bytes == 0
+    assert list(tmp_path.glob("*.pt")) == []
+    assert list(tmp_path.glob("*.json")) == []

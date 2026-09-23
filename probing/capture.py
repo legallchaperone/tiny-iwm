@@ -160,14 +160,24 @@ class FeatureRecorder:
                 event_id = hashlib.sha256(
                     json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
                 ).hexdigest()
-                if point in self.raw_points:
-                    payload["raw_file"] = f"{event_id}.pt"
-                    self.raw_bytes += self._write_once(
-                        self.root / payload["raw_file"],
-                        feature,
-                        max_bytes=self.max_raw_bytes - self.raw_bytes,
-                    )
-                self._write_once(self.root / f"{event_id}.json", payload)
+                raw_path = None
+                raw_size = 0
+                try:
+                    if point in self.raw_points:
+                        payload["raw_file"] = f"{event_id}.pt"
+                        raw_path = self.root / payload["raw_file"]
+                        raw_size = self._write_once(
+                            raw_path,
+                            feature,
+                            max_bytes=self.max_raw_bytes - self.raw_bytes,
+                        )
+                        self.raw_bytes += raw_size
+                    self._write_once(self.root / f"{event_id}.json", payload)
+                except Exception:
+                    if raw_path is not None and raw_size:
+                        raw_path.unlink(missing_ok=True)
+                        self.raw_bytes -= raw_size
+                    raise
                 self.record_count += 1
 
     @staticmethod
