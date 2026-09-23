@@ -13,7 +13,10 @@ from evaluation.identity import (
 from evaluation.official import (
     OFFICIAL_COMMIT,
     RUN_FIELDS,
+    TEMPORAL_DIMS,
+    VBenCH_DIMS,
     _validate_video,
+    _verify_official_checkout,
     _verify_scored_split,
     metric_commands,
     score_official,
@@ -197,6 +200,24 @@ def test_metric_commands_use_official_entry_points_and_pinned_protocol(tmp_path)
     ]
 
 
+def test_official_checkout_rejects_changes_outside_metric_directory(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "LICENSE").write_text("Apache-2.0")
+
+    def run(command, **kwargs):
+        if "rev-parse" in command:
+            return SimpleNamespace(stdout=OFFICIAL_COMMIT + "\n")
+        if "status" in command:
+            assert "--ignore-submodules=none" in command
+            return SimpleNamespace(stdout=" M local_libs/VBench/vbench/__init__.py\n")
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(ValueError, match="unrecorded local modifications"):
+        _verify_official_checkout(tmp_path)
+
+
 def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeypatch):
     paths = _fixture(tmp_path)
     (tmp_path / "Sana").mkdir()
@@ -219,7 +240,10 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     split = tmp_path / "simple_60s"
     split.mkdir()
     scenes = ("game_style_001", "indoor_001")
-    rows = [{"scene_id": scene, "evaluation_pair_count": 1} for scene in scenes]
+    rows = [
+        {"scene_id": scene, "evaluation_pair_count": 1, "sanawm_frames": 961, "fps": 16}
+        for scene in scenes
+    ]
     (split / "eval_poses.json").write_text(json.dumps({scene: {} for scene in scenes}))
     (root / "camera_accuracy.json").write_text(
         json.dumps({scene: {} for scene in scenes})
@@ -230,11 +254,37 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     }
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     (root / "vbench_scores.json").write_text(
-        json.dumps({"raw_scores": {str(index): 0.5 for index in range(9)}})
+        json.dumps({"raw_scores": {dimension: 0.5 for dimension in VBenCH_DIMS}})
     )
+    windows = {f"w{index}_{index * 10}s-{(index + 1) * 10}s" for index in range(6)}
     (root / "temporal_degradation.json").write_text(
-        json.dumps({"windows": {"w0": {"score": 0.5}}})
+        json.dumps({"windows": {window: {"score": 0.5} for window in windows}})
     )
+    for result_root, dimensions in [
+        (root, VBenCH_DIMS),
+        *(
+            (root / "temporal/temporal_results" / window, TEMPORAL_DIMS)
+            for window in windows
+        ),
+    ]:
+        result_root.mkdir(parents=True, exist_ok=True)
+        for dimension in dimensions:
+            (result_root / f"eval_{dimension}_eval_results.json").write_text(
+                json.dumps(
+                    {
+                        dimension: [
+                            0.5,
+                            [
+                                {
+                                    "video_path": f"{scene}_generated.mp4",
+                                    "video_results": 0.5,
+                                }
+                                for scene in scenes
+                            ],
+                        ]
+                    }
+                )
+            )
     (root / "summary.json").write_text(
         json.dumps(
             {
@@ -250,6 +300,26 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     revisit["per_scene"][scenes[1]]["n_pairs"] = 0
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     with pytest.raises(ValueError, match="incomplete coverage"):
+        _verify_scored_split(tmp_path, "simple_60s", rows)
+    revisit["per_scene"][scenes[1]]["n_pairs"] = 1
+    (root / "revisit_consistency.json").write_text(json.dumps(revisit))
+    path = root / f"eval_{VBenCH_DIMS[0]}_eval_results.json"
+    path.write_text(
+        json.dumps(
+            {
+                VBenCH_DIMS[0]: [
+                    0.5,
+                    [
+                        {
+                            "video_path": f"{scenes[0]}_generated.mp4",
+                            "video_results": 0.5,
+                        }
+                    ],
+                ]
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="incomplete VBench per-video"):
         _verify_scored_split(tmp_path, "simple_60s", rows)
 
 

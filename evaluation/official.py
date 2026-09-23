@@ -6,6 +6,7 @@ import argparse
 from fractions import Fraction
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -27,6 +28,12 @@ VBenCH_DIMS = (
     "imaging_quality",
     "overall_consistency",
     "temporal_style",
+)
+TEMPORAL_DIMS = (
+    "subject_consistency",
+    "background_consistency",
+    "temporal_flickering",
+    "imaging_quality",
 )
 RUN_FIELDS = (
     "selection_id",
@@ -271,8 +278,15 @@ def _verify_official_checkout(repo: Path) -> None:
 
     if git("rev-parse", "HEAD") != OFFICIAL_COMMIT:
         raise ValueError("official evaluator checkout differs from pinned commit")
-    if git("status", "--porcelain", "--", "tools/metrics/sana_wm"):
+    if git(
+        "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"
+    ):
         raise ValueError("official evaluator has unrecorded local modifications")
+    if any(
+        line.startswith(("-", "+", "U"))
+        for line in git("submodule", "status", "--recursive").splitlines()
+    ):
+        raise ValueError("official evaluator submodule differs from pinned checkout")
     if not (repo / "LICENSE").is_file():
         raise FileNotFoundError(repo / "LICENSE")
 
@@ -350,6 +364,13 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
     temporal = json.loads((root / "temporal_degradation.json").read_text())
     summary = json.loads((root / "summary.json").read_text())
     per_scene = revisit["per_scene"]
+    window_counts = {row["sanawm_frames"] // (10 * row["fps"]) for row in rows}
+    if len(window_counts) != 1:
+        raise ValueError("selected scenes have mixed temporal window counts")
+    expected_windows = {
+        f"w{index}_{index * 10}s-{(index + 1) * 10}s"
+        for index in range(window_counts.pop())
+    }
     if (
         set(poses) != expected
         or set(camera) != expected
@@ -363,11 +384,43 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         or summary["split"] != split
         or summary["camera"]["n_scenes"] != len(expected)
         or summary["vbench"]["n_dimensions"] != len(VBenCH_DIMS)
-        or len(vbench["raw_scores"]) != len(VBenCH_DIMS)
-        or not temporal["windows"]
+        or set(vbench["raw_scores"]) != set(VBenCH_DIMS)
+        or set(temporal["windows"]) != expected_windows
         or "temporal_degradation" not in summary
     ):
         raise ValueError(f"official scorer returned incomplete coverage for {split}")
+    for dimension in VBenCH_DIMS:
+        _verify_vbench_scene_results(root, dimension, expected)
+    for window in expected_windows:
+        for dimension in TEMPORAL_DIMS:
+            _verify_vbench_scene_results(
+                root / "temporal/temporal_results" / window, dimension, expected
+            )
+
+
+def _verify_vbench_scene_results(
+    root: Path, dimension: str, expected: set[str]
+) -> None:
+    candidates = (
+        root / f"eval_{dimension}_eval_results.json",
+        root / f"eval_{dimension}_{dimension}_eval_results.json",
+    )
+    path = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if path is None:
+        raise ValueError(f"missing VBench per-video results: {root} {dimension}")
+    result = json.loads(path.read_text())[dimension]
+    if len(result) < 2 or not math.isfinite(float(result[0])):
+        raise ValueError(f"invalid VBench results: {path}")
+    videos = result[1]
+    scenes = {
+        Path(item["video_path"]).stem.removesuffix("_generated") for item in videos
+    }
+    if (
+        len(videos) != len(expected)
+        or scenes != expected
+        or not all(math.isfinite(float(item["video_results"])) for item in videos)
+    ):
+        raise ValueError(f"incomplete VBench per-video results: {path}")
 
 
 def score_official(
@@ -413,6 +466,7 @@ def score_official(
         _verify_scored_split(
             method_dir, split, [row for row in selected_rows if row["split"] == split]
         )
+    _verify_official_checkout(official_repo)
 
 
 def main() -> None:
