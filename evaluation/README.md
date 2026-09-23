@@ -38,3 +38,5 @@ using any video from that directory.
 Official generation admits only the source-image initial prefix. The sampler
 records `initial_history_policy: source_image_only`; a resumed or prefetched
 rollout with additional clean chunks is outside this evaluation identity.
+Each row is generated alone (`batch_size: 1`) so its seeded noise stream does
+not depend on batch position or size.

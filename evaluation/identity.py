@@ -143,11 +143,14 @@ def generation_identity(
         "cfg_scale",
         "history_policy",
         "initial_history_policy",
+        "batch_size",
     }
     if not required_sampler <= sampler.keys():
         raise ValueError("sampler must identify solver, steps, CFG, and history policy")
     if sampler["initial_history_policy"] != "source_image_only":
         raise ValueError("official evaluation permits only the source-image prefix")
+    if type(sampler["batch_size"]) is not int or sampler["batch_size"] != 1:
+        raise ValueError("official evaluation requires single-row noise streams")
     if not {"camera", "text"} <= conditioning.keys():
         raise ValueError("conditioning must identify camera and text branches")
     camera, text = conditioning["camera"], conditioning["text"]

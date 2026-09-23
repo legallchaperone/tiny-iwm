@@ -85,6 +85,7 @@ def _identity(selection, row, **overrides):
             "cfg_scale": 1.0,
             "history_policy": "clean_cached",
             "initial_history_policy": "source_image_only",
+            "batch_size": 1,
         },
     }
     inputs.update(overrides)
@@ -236,6 +237,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
                 "cfg_scale": 1.0,
                 "history_policy": "clean_cached",
                 "initial_history_policy": "source_image_only",
+                "batch_size": 1,
             },
         ),
         _identity(selection, selection["rows"][1]),
@@ -260,6 +262,8 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
             row,
             sampler={**identity["sampler"], "initial_history_policy": "prefilled"},
         )
+    with pytest.raises(ValueError, match="single-row noise streams"):
+        _identity(selection, row, sampler={**identity["sampler"], "batch_size": 2})
     changed_selection = dict(selection)
     changed_selection["dataset_revision"] = "0" * 40
     with pytest.raises(ValueError, match="selection content differs"):
