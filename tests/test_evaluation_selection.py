@@ -14,6 +14,12 @@ from evaluation.selection import canonical_bytes, sha256, write_immutable
 
 
 MANIFEST = Path("data/manifests/sana_wm_eval_subset_v1.json")
+BACKEND = {
+    "device_name": "NVIDIA A10G",
+    "compute_capability": "8.6",
+    "cuda_runtime": "12.8",
+    "cudnn_version": 91002,
+}
 
 
 def _selection():
@@ -44,6 +50,7 @@ def _identity(selection, row, **overrides):
             "attention_backend": "math",
             "torch_version": "2.8.0",
             "tf32_enabled": False,
+            "backend_fingerprint": BACKEND,
         },
         "rollout_layout": VideoLayout.from_codec(
             fps=16,
@@ -88,6 +95,13 @@ def test_frozen_subset_preserves_official_minute_protocol():
         and row["evaluation_pair_max_frame"] < 960
         for row in selection["rows"]
     )
+    assert all(
+        row["conditions"][f"{kind}_sha256"]
+        == selection["source_sha256"][row["conditions"][f"{kind}_path"]]
+        and row["conditions_sha256"] == sha256(canonical_bytes(row["conditions"]))
+        for row in selection["rows"]
+        for kind in ("image", "camera")
+    )
 
 
 def test_generation_identity_separates_all_variable_inputs(tmp_path):
@@ -117,6 +131,15 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
                 "attention_backend": "math",
                 "torch_version": "2.8.0",
                 "tf32_enabled": False,
+                "backend_fingerprint": BACKEND,
+            },
+        ),
+        _identity(
+            selection,
+            row,
+            numeric_execution={
+                **baseline["numeric_execution"],
+                "backend_fingerprint": {**BACKEND, "device_name": "NVIDIA H100"},
             },
         ),
         _identity(
@@ -166,7 +189,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 12
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 13
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)

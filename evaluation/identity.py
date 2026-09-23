@@ -54,12 +54,29 @@ def generation_identity(
             "attention_backend",
             "torch_version",
             "tf32_enabled",
+            "backend_fingerprint",
         }
         <= numeric_execution.keys()
     ):
         raise ValueError(
             "numeric execution must identify dtypes, attention, torch, and TF32"
         )
+    backend = numeric_execution["backend_fingerprint"]
+    if (
+        not isinstance(backend, dict)
+        or not {"device_name", "compute_capability", "cuda_runtime", "cudnn_version"}
+        <= backend.keys()
+        or any(
+            not backend[key]
+            for key in (
+                "device_name",
+                "compute_capability",
+                "cuda_runtime",
+                "cudnn_version",
+            )
+        )
+    ):
+        raise ValueError("numeric execution must identify the hardware backend")
     if len(spatial_resolution) != 2 or any(
         type(value) is not int or value <= 0 for value in spatial_resolution
     ):

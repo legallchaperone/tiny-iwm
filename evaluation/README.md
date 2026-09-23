@@ -8,8 +8,9 @@ model checkpoint and can be reused across representations and runs.
 
 To reproduce it, download only `scene_set/kept_scenes.txt`, each split's
 `sanawm_export_v2/run_manifest.jsonl`, and each split's
-`scene_trajectories_v2.json` from that dataset revision into the official
-directory layout. Then run:
+`scene_trajectories_v2.json`, plus the four selected images and eight selected
+camera NPZ files, from that dataset revision into the official directory
+layout. The selection includes the SHA-256 of every selected asset. Then run:
 
 ```bash
 python -m evaluation.selection --source-root /path/to/SANA-WM-Bench \
@@ -28,7 +29,7 @@ per row so scoring can verify it loaded the same pairs without redefining them.
 `generation_identity` hashes the frozen selection, checkpoint and weight flavor,
 codec, spatial resolution, preprocessing, the complete temporal rollout layout,
 source conditions, resolved camera/text conditioning settings, implementation
-revision, numeric execution settings, seed, and sampler. `claim_output_directory` writes a
+revision, numerical settings and hardware backend, seed, and sampler. `claim_output_directory` writes a
 matching `identity.json` into an identity-specific directory and rejects a
 conflicting claim. Generation and scoring should verify this identity before
 using any video from that directory.

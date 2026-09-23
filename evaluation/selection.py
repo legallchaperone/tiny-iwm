@@ -162,11 +162,17 @@ def build_selection(
                 "dataset_revision": revision,
                 "image_path": item["image_path"],
                 "camera_path": item["camera_path"],
+                "image_sha256": sha256((source_root / item["image_path"]).read_bytes()),
+                "camera_sha256": sha256(
+                    (source_root / item["camera_path"]).read_bytes()
+                ),
                 "prompt": item["prompt"],
                 "trajectory_id": item["trajectory_id"],
                 "official_manifest_row_sha256": sha256(canonical_bytes(item)),
                 "official_trajectory_row_sha256": sha256(canonical_bytes(motion)),
             }
+            source_hashes[item["image_path"]] = conditions["image_sha256"]
+            source_hashes[item["camera_path"]] = conditions["camera_sha256"]
             for seed in generation_seeds:
                 rows.append(
                     {

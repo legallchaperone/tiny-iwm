@@ -2,6 +2,6 @@ protocol: sana_wm_official
 selection: subset
 manifest: data/manifests/sana_wm_eval_subset_v1.json
 dataset_revision: 0e5279250e7a531b83ce4e9ee2870fab7003be0b
-selection_id: sha256:bc2f11eb39fc90fe8300a33c11c01e3fbe5f00503e62286077dce3ecf03722e1
+selection_id: sha256:6011657c87ab24853a1b45f26dedcfe24530880249075214c7c3b63cbb75bd4b
 metrics: null  # unresolved official metric list/version
 seeds: [42]
