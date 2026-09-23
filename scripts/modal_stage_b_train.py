@@ -202,7 +202,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 "patch_size": tuple(config["model"]["patch_size"]),
             }
         )
-    ).to(device=device, dtype=dtype)
+    ).to(device=device, dtype=torch.float32)
     optimizer = build_optimizer(
         model,
         OptimizerSpec(
@@ -282,35 +282,42 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             generator=generator,
             flow_time=flow_time,
         )
-        prediction = model(
-            batch.noisy_latents,
-            batch.model_time,
-            visibility_mask=mask,
-            camera_projection=projection,
-        )
+        with torch.autocast(device_type="cuda", dtype=dtype):
+            prediction = model(
+                batch.noisy_latents,
+                batch.model_time,
+                visibility_mask=mask,
+                camera_projection=projection,
+            )
         return flow_matching_loss(
-            prediction,
-            batch.target_velocity,
+            prediction.float(),
+            batch.target_velocity.float(),
             loss_mask=batch.loss_mask,
-            time=batch.flow_time,
+            time=batch.flow_time.float(),
             spec=flow_spec,
         )
 
-    def with_ema(task):
-        raw = {
-            name: value.detach().clone()
-            for name, value in model.state_dict().items()
-            if value.is_floating_point()
-        }
-        ema.copy_to(model)
+    def with_validation_weights(task):
+        use_ema = config["validation"]["weights"] == "ema"
+        if config["validation"]["weights"] not in {"ema", "model"}:
+            raise ValueError("validation weights must be model or ema")
+        raw = None
+        if use_ema:
+            raw = {
+                name: value.detach().clone()
+                for name, value in model.state_dict().items()
+                if value.is_floating_point()
+            }
+            ema.copy_to(model)
         model.eval()
         try:
-            with torch.no_grad():
+            with torch.no_grad(), torch.autocast(device_type="cuda", dtype=dtype):
                 return task()
         finally:
-            state = model.state_dict()
-            for name, value in raw.items():
-                state[name].copy_(value)
+            if raw is not None:
+                state = model.state_dict()
+                for name, value in raw.items():
+                    state[name].copy_(value)
             model.train()
 
     def validate() -> float:
@@ -335,7 +342,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                     )
             return sum(losses) / len(losses)
 
-        return with_ema(measure)
+        return with_validation_weights(measure)
 
     provenance = CheckpointProvenance(
         run_id=config["run_id"],
@@ -391,7 +398,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 )
             if step in config["validation"]["steps"]:
                 metric = validate()
-                validations.append({"step": step, "ema_flow_matching_mse": metric})
+                validations.append({"step": step, "model_flow_matching_mse": metric})
                 if metric < best_metric:
                     best_metric, best_step = metric, step
                     best_id = save_checkpoint(
@@ -557,7 +564,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             },
         }
 
-    gate = with_ema(correctness_gate)
+    gate = with_validation_weights(correctness_gate)
     torch.cuda.synchronize()
     return json.dumps(
         {
@@ -575,7 +582,8 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 "path": str(BEST_CHECKPOINT),
                 "checkpoint_id": best_id,
                 "step": best_step,
-                "ema_flow_matching_mse": best_metric,
+                "weight_flavor": config["validation"]["weights"],
+                "flow_matching_mse": best_metric,
             },
             "training": {
                 "steps": 0 if verify_only else config["optimization"]["steps"],

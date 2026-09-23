@@ -67,9 +67,10 @@ counterfactual. The report keeps quality limitations explicit.
 `modal run scripts/modal_stage_b_train.py::inspect_inputs` checks the pinned
 manifest, prepared files, and Stage B initialization checkpoint on CPU. To run
 the bounded 100-step training and correctness gate, use
-`modal run scripts/modal_stage_b_train.py`. The local entrypoint performs the
+`modal run scripts/modal_stage_b_train.py::main`. The local entrypoint performs the
 CPU check before allocating one A10G. The GPU function reads only the existing
-`tiny-iwm-stage-a` Volume, selects an EMA checkpoint by held-out FM loss, then
+`tiny-iwm-stage-a` Volume, keeps trainable parameters and EMA in FP32 while
+using BF16 autocast for compute, selects trained model weights by held-out FM loss, then
 checks clean-target/future leakage and multi-chunk cached/reference equivalence.
 
 `modal run scripts/modal_stage_b_train.py::verify` reruns only the correctness
