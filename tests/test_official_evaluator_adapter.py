@@ -537,6 +537,26 @@ def test_scoring_rechecks_video_after_final_metric(tmp_path, monkeypatch):
         score_official(*paths, tmp_path / "Sana", seed=42)
 
 
+def test_scoring_rechecks_staged_link_after_metric(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    other = tmp_path / "other.mp4"
+    other.write_bytes(b"fake video for directory adapter test")
+    link = paths[3] / "simple_60s/game_style_001_generated.mp4"
+
+    def run(command, **kwargs):
+        link.unlink()
+        link.symlink_to(other)
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(
+        ValueError, match="staged video link changed during official scoring"
+    ):
+        score_official(*paths, tmp_path / "Sana", seed=42)
+
+
 def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
     calls = []
 

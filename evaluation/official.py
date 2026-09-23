@@ -600,6 +600,15 @@ def score_official(
         for row in _selection(selection_path)["rows"]
         if row["generation_seed"] == seed
     ]
+
+    def verify_staged_video(row: dict, phase: str) -> None:
+        source = Path(row["source_video"])
+        target = Path(row["official_video"])
+        if not target.is_symlink() or target.resolve() != source.resolve():
+            raise ValueError(f"staged video link changed {phase} official scoring")
+        if _file_sha256(source) != row["video_sha256"]:
+            raise ValueError(f"staged video changed {phase} official scoring")
+
     for split in sorted({row["split"] for row in staged["staged"]}):
         metric, camera = metric_commands(
             official_repo, benchmark_root, method_dir, split
@@ -607,12 +616,10 @@ def score_official(
         split_videos = [row for row in staged["staged"] if row["split"] == split]
         for command in (camera, metric):
             for row in split_videos:
-                if _file_sha256(Path(row["source_video"])) != row["video_sha256"]:
-                    raise ValueError("staged video changed before official scoring")
+                verify_staged_video(row, "before")
             subprocess.run(command, cwd=official_repo, check=True)
             for row in split_videos:
-                if _file_sha256(Path(row["source_video"])) != row["video_sha256"]:
-                    raise ValueError("staged video changed during official scoring")
+                verify_staged_video(row, "during")
         _verify_scored_split(
             method_dir,
             benchmark_root,
