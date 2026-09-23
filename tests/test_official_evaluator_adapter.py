@@ -237,14 +237,24 @@ def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeyp
     monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
     monkeypatch.setattr("evaluation.official._verify_scored_split", lambda *_: None)
     commands = []
-    monkeypatch.setattr(
-        "evaluation.official.subprocess.run",
-        lambda command, **_: commands.append(command),
-    )
+
+    def run(command, **kwargs):
+        commands.append(command)
+        (paths[3] / "simple_60s/eval_poses.json").write_text("{}")
+        result = paths[3] / "eval/simple_60s/summary.json"
+        result.parent.mkdir(parents=True, exist_ok=True)
+        result.write_text("{}")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
     score_official(*paths, tmp_path / "Sana", seed=42)
     scoring = json.loads((paths[3] / "scoring.json").read_text())
     assert scoring["official_source"]["checkout_verified"] is True
     assert scoring["official_source"]["local_modifications"] == []
+    assert set(scoring["result_sha256"]) == {
+        "simple_60s/eval_poses.json",
+        "eval/simple_60s/summary.json",
+    }
+    assert set(scoring["result_sha256"].values()) == {sha256(b"{}")}
     assert commands[0][1].endswith("eval_benchmark_poses.py")
     assert commands[1][1].endswith("eval_unified.py")
 
@@ -525,10 +535,13 @@ def test_staging_ignores_other_generation_seed(tmp_path, monkeypatch):
 def test_staging_rejects_video_changed_after_generation(tmp_path, monkeypatch):
     monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
     paths = _fixture(tmp_path)
+    stage_official_inputs(*paths, seed=42)
+    (paths[3] / "scoring.json").write_text("old completion")
     video = next(paths[2].glob("simple_60s/game_style_001/*/video.mp4"))
     video.write_bytes(b"different complete video")
     with pytest.raises(ValueError, match="differs from its identity metadata"):
         stage_official_inputs(*paths, seed=42)
+    assert not (paths[3] / "scoring.json").exists()
 
 
 def test_scoring_rechecks_video_between_official_metrics(tmp_path, monkeypatch):
@@ -543,6 +556,20 @@ def test_scoring_rechecks_video_between_official_metrics(tmp_path, monkeypatch):
 
     monkeypatch.setattr("evaluation.official.subprocess.run", run)
     with pytest.raises(ValueError, match="changed during official scoring"):
+        score_official(*paths, tmp_path / "Sana", seed=42)
+
+
+def test_scoring_rechecks_benchmark_metadata_after_metric(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+
+    def run(command, **kwargs):
+        (paths[1] / "kept.txt").write_bytes(b"changed metadata")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(ValueError, match="official benchmark metadata hash differs"):
         score_official(*paths, tmp_path / "Sana", seed=42)
 
 

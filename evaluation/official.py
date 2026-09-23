@@ -175,6 +175,7 @@ def stage_official_inputs(
 ) -> dict:
     """Adapt directory format only; never edit metric code or generated videos."""
     method_dir = method_dir.resolve()
+    (method_dir / "scoring.json").unlink(missing_ok=True)
     selection = _selection(selection_path)
     _verify_metadata(selection, benchmark_root)
     chosen = [row for row in selection["rows"] if row["generation_seed"] == seed]
@@ -593,6 +594,16 @@ def _verify_vbench_scene_results(
         raise ValueError(f"incomplete VBench per-video results: {path}")
 
 
+def _result_manifest(method_dir: Path, splits: list[str]) -> dict[str, str]:
+    paths = []
+    for split in splits:
+        poses = method_dir / split / "eval_poses.json"
+        if poses.is_file():
+            paths.append(poses)
+        paths.extend(sorted((method_dir / "eval" / split).rglob("*.json")))
+    return {str(path.relative_to(method_dir)): _file_sha256(path) for path in paths}
+
+
 def score_official(
     selection_path: Path,
     benchmark_root: Path,
@@ -616,13 +627,10 @@ def score_official(
         seed=seed,
         run_id=run_id,
     )
-    selected_rows = [
-        row
-        for row in _selection(selection_path)["rows"]
-        if row["generation_seed"] == seed
-    ]
-    (method_dir / "scoring.json").unlink(missing_ok=True)
-    for split in {row["split"] for row in staged["staged"]}:
+    selection = _selection(selection_path)
+    selected_rows = [row for row in selection["rows"] if row["generation_seed"] == seed]
+    splits = sorted({row["split"] for row in staged["staged"]})
+    for split in splits:
         (method_dir / split / "eval_poses.json").unlink(missing_ok=True)
         metrics_root = method_dir / "eval" / split
         if metrics_root.is_dir():
@@ -636,7 +644,7 @@ def score_official(
         if _file_sha256(source) != row["video_sha256"]:
             raise ValueError(f"staged video changed {phase} official scoring")
 
-    for split in sorted({row["split"] for row in staged["staged"]}):
+    for split in splits:
         metric, camera = metric_commands(
             official_repo, benchmark_root, method_dir, split
         )
@@ -653,10 +661,12 @@ def score_official(
                 )
 
         for command in (camera, metric):
+            _verify_metadata(selection, benchmark_root)
             verify_video_set()
             for row in split_videos:
                 verify_staged_video(row, "before")
             subprocess.run(command, cwd=official_repo, check=True)
+            _verify_metadata(selection, benchmark_root)
             verify_video_set()
             for row in split_videos:
                 verify_staged_video(row, "during")
@@ -666,12 +676,24 @@ def score_official(
             split,
             [row for row in selected_rows if row["split"] == split],
         )
+    result_sha256 = _result_manifest(method_dir, splits)
+    for split in splits:
+        _verify_scored_split(
+            method_dir,
+            benchmark_root,
+            split,
+            [row for row in selected_rows if row["split"] == split],
+        )
+    if _result_manifest(method_dir, splits) != result_sha256:
+        raise ValueError("official metric outputs changed during validation")
+    _verify_metadata(selection, benchmark_root)
     _verify_official_checkout(official_repo)
     write_immutable(
         method_dir / "scoring.json",
         {
             "schema_version": 1,
             "staging_sha256": sha256(canonical_bytes(staged)),
+            "result_sha256": result_sha256,
             "official_source": {
                 "repository": OFFICIAL_REPO,
                 "commit": OFFICIAL_COMMIT,
