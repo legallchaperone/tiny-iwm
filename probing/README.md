@@ -25,6 +25,19 @@ lock before publishing records.
 records during activation recomputation while leaving the recomputed forward
 unchanged.
 
+`python -m probing.metrics --capture-root CAPTURE --output report.json` computes
+norm distribution, centered singular values, and energy-based effective rank
+from the opt-in raw tokens. Rows are selected sample/token observations;
+columns are feature channels; centering subtracts the mean of each channel
+across rows. `--compare-root OTHER` joins the same sample, generation seed,
+rollout time, FM time, token position/type, layer, branch, and forward purpose
+before computing centered linear CKA and, for equal channel counts, mean row
+cosine and L2 drift. `--history-alignment` pairs controlled GT-history and
+generated-history records from the same checkpoint/config and reports drift
+separately by layer and each rollout/FM time. Reports link to the exact raw
+files and hash both record metadata and raw tensor bytes. At least two matched
+observations per comparison group are required.
+
 ## Held-out controlled replay
 
 `controlled_replay` accepts one held-out sample's ground-truth and generated
