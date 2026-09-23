@@ -18,6 +18,7 @@ from evaluation.official import (
     _validate_video,
     _verify_official_checkout,
     _verify_scored_split,
+    _verify_vbench_scene_results,
     metric_commands,
     score_official,
     stage_official_inputs,
@@ -246,6 +247,22 @@ def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeyp
     assert scoring["official_source"]["local_modifications"] == []
     assert commands[0][1].endswith("eval_benchmark_poses.py")
     assert commands[1][1].endswith("eval_unified.py")
+
+
+@pytest.mark.parametrize("invalid", [True, "0.5"])
+def test_vbench_scene_results_reject_nonnumeric_values(tmp_path, invalid):
+    path = tmp_path / "eval_subject_consistency_eval_results.json"
+    video = {"video_path": "scene_generated.mp4", "video_results": 0.5}
+    path.write_text(json.dumps({"subject_consistency": [invalid, [video]]}))
+    with pytest.raises(ValueError, match="invalid VBench results"):
+        _verify_vbench_scene_results(tmp_path, "subject_consistency", {"scene"})
+    path.write_text(
+        json.dumps(
+            {"subject_consistency": [0.5, [{**video, "video_results": invalid}]]}
+        )
+    )
+    with pytest.raises(ValueError, match="incomplete VBench per-video results"):
+        _verify_vbench_scene_results(tmp_path, "subject_consistency", {"scene"})
 
 
 def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):

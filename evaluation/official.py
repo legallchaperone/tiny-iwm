@@ -579,7 +579,7 @@ def _verify_vbench_scene_results(
     if path is None:
         raise ValueError(f"missing VBench per-video results: {root} {dimension}")
     result = json.loads(path.read_text())[dimension]
-    if len(result) < 2 or not math.isfinite(float(result[0])):
+    if len(result) < 2 or not _finite_number(result[0]):
         raise ValueError(f"invalid VBench results: {path}")
     videos = result[1]
     scenes = {
@@ -588,7 +588,7 @@ def _verify_vbench_scene_results(
     if (
         len(videos) != len(expected)
         or scenes != expected
-        or not all(math.isfinite(float(item["video_results"])) for item in videos)
+        or not all(_finite_number(item["video_results"]) for item in videos)
     ):
         raise ValueError(f"incomplete VBench per-video results: {path}")
 
