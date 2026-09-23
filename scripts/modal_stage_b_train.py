@@ -23,6 +23,7 @@ volume = modal.Volume.from_name("tiny-iwm-stage-a", create_if_missing=False)
 MANIFEST_PATH = VOLUME_ROOT / "manifest.json"
 CONFIG_PATH = Path("/opt/tiny-iwm/configurations/runs/stage_b_baseline.yaml")
 INITIAL_CHECKPOINT = VOLUME_ROOT / "checkpoints/stage-b-init.pt"
+INITIAL_ARTIFACT = Path("/opt/tiny-iwm/artifacts/m4/cwx-24-stage-b-initialization.json")
 BEST_CHECKPOINT = VOLUME_ROOT / "checkpoints/stage-b-best.pt"
 app = modal.App("tiny-iwm-cwx-26-stage-b")
 
@@ -70,6 +71,11 @@ def inspect_inputs() -> str:
     if not INITIAL_CHECKPOINT.is_file():
         raise FileNotFoundError(INITIAL_CHECKPOINT)
     checkpoint_id = _file_id(INITIAL_CHECKPOINT)
+    if (
+        checkpoint_id
+        != json.loads(INITIAL_ARTIFACT.read_text())["stage_b_checkpoint_id"]
+    ):
+        raise ValueError("Stage B initialization differs from pinned CWX-24 artifact")
     sidecar = INITIAL_CHECKPOINT.with_suffix(".pt.sha256")
     if (
         not sidecar.is_file()
@@ -174,6 +180,12 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         raise ValueError("prepared manifest changed after CPU preflight")
     if _file_id(INITIAL_CHECKPOINT) != preflight["initial_checkpoint_id"]:
         raise ValueError("initial checkpoint changed after CPU preflight")
+    for split in ("train", "validation"):
+        for record in manifest["splits"][split]:
+            if _file_id(Path(record["prepared_path"])) != record["sha256"]:
+                raise ValueError(
+                    f"prepared sample changed after CPU preflight: {record['prepared_path']}"
+                )
     if not torch.cuda.is_available():
         raise RuntimeError("Stage B GPU function requires CUDA")
 
