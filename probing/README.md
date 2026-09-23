@@ -48,3 +48,5 @@ source. The returned report records hashes of those fixed inputs, both history
 hashes, provenance IDs, and prediction error/drift. Join it to rollout or
 revisit results using `selection_id`, `generation_id`, and `sample_id`; the
 report is labeled as a controlled replay rather than an observed rollout.
+Captured replay records also carry `selection_id` and `generation_id`, so
+separate runs can share a bounded capture directory without identity collisions.

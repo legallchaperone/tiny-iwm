@@ -206,4 +206,6 @@ class ProbeEvent:
     physical_position: Mapping[str, float]
     branch: str
     forward_purpose: str
+    selection_id: Optional[str] = None
+    generation_id: Optional[str] = None
     value: Optional[Any] = None

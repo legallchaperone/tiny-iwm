@@ -148,6 +148,8 @@ def controlled_replay(
             flow_time=float(flow_time[0]),
             branch="conditional",
             forward_purpose=purpose,
+            selection_id=selection_id,
+            generation_id=generation_id,
         )
         predictions.append(
             session.predict(

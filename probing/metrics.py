@@ -35,7 +35,13 @@ PAIR_FIELDS = (
     "branch",
     "physical_position",
 )
-CONTROLLED_FIELDS = PAIR_FIELDS + ("checkpoint_id", "config_id", "training_seed")
+RUN_ID_FIELDS = ("selection_id", "generation_id")
+CONTROLLED_FIELDS = PAIR_FIELDS + (
+    "checkpoint_id",
+    "config_id",
+    "training_seed",
+    *RUN_ID_FIELDS,
+)
 VARIANT_FIELDS = PAIR_FIELDS + ("forward_purpose",)
 ALIGNMENT_GROUP_FIELDS = (
     "checkpoint_id",
@@ -47,6 +53,7 @@ ALIGNMENT_GROUP_FIELDS = (
     "branch",
     "rollout_time",
     "flow_time",
+    *RUN_ID_FIELDS,
 )
 
 
@@ -153,7 +160,10 @@ def compare_features(left: torch.Tensor, right: torch.Tensor) -> dict:
 
 
 def _key(record: dict, fields: tuple[str, ...]) -> tuple:
-    return tuple(_canonical(record[field]) for field in fields)
+    return tuple(
+        _canonical(record.get(field) if field in RUN_ID_FIELDS else record[field])
+        for field in fields
+    )
 
 
 def _sort_key(record: dict, fields: tuple[str, ...]) -> tuple:
@@ -166,7 +176,10 @@ def _sort_key(record: dict, fields: tuple[str, ...]) -> tuple:
             return (2, value)
         return (3, _canonical(value))
 
-    return tuple(part(record[field]) for field in fields)
+    return tuple(
+        part(record.get(field) if field in RUN_ID_FIELDS else record[field])
+        for field in fields
+    )
 
 
 def pair_captures(
@@ -260,7 +273,7 @@ def history_alignment(root: Path) -> dict:
         by_group.append(
             {
                 **{
-                    field: matched[indices[0]][field]
+                    field: matched[indices[0]].get(field)
                     for field in ALIGNMENT_GROUP_FIELDS
                 },
                 **compare_features(

@@ -197,3 +197,26 @@ def test_controlled_replay_metrics_promote_before_subtracting(monkeypatch):
 def test_tensor_hash_ignores_unrelated_backing_storage():
     values = torch.tensor([[1.0], [2.0], [3.0]])
     assert _tensor_sha256(values[1:2]) == _tensor_sha256(values[1:2].clone())
+
+
+def test_capture_distinguishes_replay_generation_and_selection(tmp_path):
+    model, layout, arguments = _inputs()
+    recorder = FeatureRecorder(
+        tmp_path,
+        points=("final_norm",),
+        tokens=(TokenSelection(8, "target", {"rgb_frame": 2.0}),),
+        max_records=4,
+    )
+    controlled_replay(model, layout, recorder=recorder, **arguments)
+    arguments.update(generation_id="other-generation", selection_id="other-selection")
+    controlled_replay(model, layout, recorder=recorder, **arguments)
+    records = [json.loads(path.read_text()) for path in tmp_path.glob("*.json")]
+    assert len(records) == 4
+    assert {record["generation_id"] for record in records} == {
+        "generation",
+        "other-generation",
+    }
+    assert {record["selection_id"] for record in records} == {
+        "selection",
+        "other-selection",
+    }
