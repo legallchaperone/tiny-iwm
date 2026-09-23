@@ -82,7 +82,9 @@ official checkout, rejects modified metric scripts, and calls the official
 VBench/revisit/temporal and Pi3 camera entry points. Their raw per-scene files
 remain under the method directory. After complete scoring and a second checkout
 check, `scoring.json` records the verified commit and zero local modifications,
-bound to the staged inputs by SHA-256. It uses the official nine VBench dimensions,
+bound to the staged inputs by SHA-256. A rescore clears that completion record
+before running the official scripts and restores it only after successful validation.
+It uses the official nine VBench dimensions,
 five revisit pairs per scene, 16 FPS reference, 10-second windows, and no
 first-frame skip for this unrefined model. Camera/Pi3 evaluation uses GPU, so
 run `stage` and validate video completeness on CPU before invoking `score`.

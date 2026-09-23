@@ -600,6 +600,7 @@ def score_official(
         for row in _selection(selection_path)["rows"]
         if row["generation_seed"] == seed
     ]
+    (method_dir / "scoring.json").unlink(missing_ok=True)
 
     def verify_staged_video(row: dict, phase: str) -> None:
         source = Path(row["source_video"])

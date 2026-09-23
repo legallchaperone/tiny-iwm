@@ -557,6 +557,25 @@ def test_scoring_rechecks_staged_link_after_metric(tmp_path, monkeypatch):
         score_official(*paths, tmp_path / "Sana", seed=42)
 
 
+def test_failed_rescore_removes_previous_completion_record(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    monkeypatch.setattr("evaluation.official._verify_scored_split", lambda *_: None)
+    monkeypatch.setattr("evaluation.official.subprocess.run", lambda *_, **__: None)
+    score_official(*paths, tmp_path / "Sana", seed=42)
+    assert (paths[3] / "scoring.json").is_file()
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("scorer failed")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", fail)
+    with pytest.raises(RuntimeError, match="scorer failed"):
+        score_official(*paths, tmp_path / "Sana", seed=42)
+    assert not (paths[3] / "scoring.json").exists()
+
+
 def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
     calls = []
 
