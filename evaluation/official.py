@@ -337,6 +337,39 @@ def metric_commands(
     return metric, camera
 
 
+def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None:
+    expected = {row["scene_id"] for row in rows}
+    expected_pairs = {
+        row["scene_id"]: min(5, row["evaluation_pair_count"]) for row in rows
+    }
+    root = method_dir / "eval" / split
+    poses = json.loads((method_dir / split / "eval_poses.json").read_text())
+    revisit = json.loads((root / "revisit_consistency.json").read_text())
+    camera = json.loads((root / "camera_accuracy.json").read_text())
+    vbench = json.loads((root / "vbench_scores.json").read_text())
+    temporal = json.loads((root / "temporal_degradation.json").read_text())
+    summary = json.loads((root / "summary.json").read_text())
+    per_scene = revisit["per_scene"]
+    if (
+        set(poses) != expected
+        or set(camera) != expected
+        or set(per_scene) != expected
+        or any(
+            per_scene[scene]["n_pairs"] != count
+            for scene, count in expected_pairs.items()
+        )
+        or revisit["summary"]["n_total_pairs"] != sum(expected_pairs.values())
+        or summary["n_videos"] != len(expected)
+        or summary["split"] != split
+        or summary["camera"]["n_scenes"] != len(expected)
+        or summary["vbench"]["n_dimensions"] != len(VBenCH_DIMS)
+        or len(vbench["raw_scores"]) != len(VBenCH_DIMS)
+        or not temporal["windows"]
+        or "temporal_degradation" not in summary
+    ):
+        raise ValueError(f"official scorer returned incomplete coverage for {split}")
+
+
 def score_official(
     selection_path: Path,
     benchmark_root: Path,
@@ -360,6 +393,11 @@ def score_official(
         seed=seed,
         run_id=run_id,
     )
+    selected_rows = [
+        row
+        for row in _selection(selection_path)["rows"]
+        if row["generation_seed"] == seed
+    ]
     for split in sorted({row["split"] for row in staged["staged"]}):
         metric, camera = metric_commands(
             official_repo, benchmark_root, method_dir, split
@@ -372,6 +410,9 @@ def score_official(
                 ):
                     raise ValueError("staged video changed before official scoring")
             subprocess.run(command, cwd=official_repo, check=True)
+        _verify_scored_split(
+            method_dir, split, [row for row in selected_rows if row["split"] == split]
+        )
 
 
 def main() -> None:

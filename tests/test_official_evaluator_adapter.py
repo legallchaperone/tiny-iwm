@@ -14,6 +14,7 @@ from evaluation.official import (
     OFFICIAL_COMMIT,
     RUN_FIELDS,
     _validate_video,
+    _verify_scored_split,
     metric_commands,
     score_official,
     stage_official_inputs,
@@ -201,6 +202,7 @@ def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeyp
     (tmp_path / "Sana").mkdir()
     monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
     monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    monkeypatch.setattr("evaluation.official._verify_scored_split", lambda *_: None)
     commands = []
     monkeypatch.setattr(
         "evaluation.official.subprocess.run",
@@ -209,6 +211,46 @@ def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeyp
     score_official(*paths, tmp_path / "Sana", seed=42)
     assert commands[0][1].endswith("eval_benchmark_poses.py")
     assert commands[1][1].endswith("eval_unified.py")
+
+
+def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
+    root = tmp_path / "eval/simple_60s"
+    root.mkdir(parents=True)
+    split = tmp_path / "simple_60s"
+    split.mkdir()
+    scenes = ("game_style_001", "indoor_001")
+    rows = [{"scene_id": scene, "evaluation_pair_count": 1} for scene in scenes]
+    (split / "eval_poses.json").write_text(json.dumps({scene: {} for scene in scenes}))
+    (root / "camera_accuracy.json").write_text(
+        json.dumps({scene: {} for scene in scenes})
+    )
+    revisit = {
+        "per_scene": {scene: {"n_pairs": 1} for scene in scenes},
+        "summary": {"n_total_pairs": 2},
+    }
+    (root / "revisit_consistency.json").write_text(json.dumps(revisit))
+    (root / "vbench_scores.json").write_text(
+        json.dumps({"raw_scores": {str(index): 0.5 for index in range(9)}})
+    )
+    (root / "temporal_degradation.json").write_text(
+        json.dumps({"windows": {"w0": {"score": 0.5}}})
+    )
+    (root / "summary.json").write_text(
+        json.dumps(
+            {
+                "n_videos": 2,
+                "split": "simple_60s",
+                "camera": {"n_scenes": 2},
+                "vbench": {"n_dimensions": 9},
+                "temporal_degradation": {"score": 0.5},
+            }
+        )
+    )
+    _verify_scored_split(tmp_path, "simple_60s", rows)
+    revisit["per_scene"][scenes[1]]["n_pairs"] = 0
+    (root / "revisit_consistency.json").write_text(json.dumps(revisit))
+    with pytest.raises(ValueError, match="incomplete coverage"):
+        _verify_scored_split(tmp_path, "simple_60s", rows)
 
 
 def test_staging_rejects_unselected_video(tmp_path, monkeypatch):
