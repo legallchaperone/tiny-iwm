@@ -20,6 +20,7 @@ def rollout_latents(
     steps: int,
     seed: int,
     mode: str = "cached",
+    initial_history_policy: str = "allow_clean_prefill",
     camera_projection: TokenCameraProjection | None = None,
 ) -> torch.Tensor:
     """Generate all remaining chunks and return the full latent trajectory.
@@ -31,6 +32,10 @@ def rollout_latents(
         raise ValueError(
             "steps must be positive and at least one clean chunk is required"
         )
+    if initial_history_policy not in {"allow_clean_prefill", "source_image_only"}:
+        raise ValueError("unknown initial history policy")
+    if initial_history_policy == "source_image_only" and len(initial_chunks) != 1:
+        raise ValueError("source-image-only rollout rejects extra clean chunks")
     if mode not in {"cached", "reference"}:
         raise ValueError("mode must be 'cached' or 'reference'")
     session = HistorySession(
