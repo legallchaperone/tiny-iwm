@@ -87,6 +87,20 @@ def test_controlled_history_alignment_keeps_rollout_and_fm_time_separate(tmp_pat
     assert "rollout_time" in alignment["fixed_fields"]
 
 
+def test_history_alignment_aggregates_scenes_with_distinct_generation_ids(tmp_path):
+    for scene in ("scene-a", "scene-b"):
+        for purpose in ("controlled_gt_history", "controlled_generated_history"):
+            _write(tmp_path, purpose, 8, scene, [1.0, float(len(scene))])
+            path = tmp_path / f"{purpose}-8-{scene}.json"
+            record = json.loads(path.read_text())
+            record.update(selection_id="selection", generation_id=f"generation-{scene}")
+            path.write_text(json.dumps(record))
+    report = history_alignment(tmp_path)
+    assert len(report["per_group"]) == 1
+    assert report["per_group"][0]["matched_observations"] == 2
+    assert report["per_group"][0]["selection_id"] == "selection"
+
+
 def test_history_alignment_keeps_model_provenance_separate(tmp_path):
     for scene in ("a", "b", "c", "d"):
         for purpose in ("controlled_gt_history", "controlled_generated_history"):

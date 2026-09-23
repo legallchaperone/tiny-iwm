@@ -53,7 +53,7 @@ ALIGNMENT_GROUP_FIELDS = (
     "branch",
     "rollout_time",
     "flow_time",
-    *RUN_ID_FIELDS,
+    "selection_id",
 )
 
 
