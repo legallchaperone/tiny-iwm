@@ -21,6 +21,8 @@ def generation_identity(
     preprocessing_id: str,
     rollout_layout: VideoLayout,
     conditioning: dict,
+    implementation_id: str,
+    numeric_execution: dict,
     sampler: dict,
 ) -> dict:
     """Hash every input that can change a generated trajectory."""
@@ -40,8 +42,24 @@ def generation_identity(
         raise ValueError("checkpoint_id must be a SHA-256 digest")
     if weight_flavor not in {"model", "ema"}:
         raise ValueError("weight_flavor must be model or ema")
-    if not codec_id or not preprocessing_id or not sampler:
-        raise ValueError("codec, preprocessing, and sampler must be explicit")
+    if not codec_id or not preprocessing_id or not implementation_id or not sampler:
+        raise ValueError(
+            "codec, preprocessing, implementation, and sampler must be explicit"
+        )
+    if (
+        not {
+            "parameter_dtype",
+            "autocast_dtype",
+            "latent_dtype",
+            "attention_backend",
+            "torch_version",
+            "tf32_enabled",
+        }
+        <= numeric_execution.keys()
+    ):
+        raise ValueError(
+            "numeric execution must identify dtypes, attention, torch, and TF32"
+        )
     if len(spatial_resolution) != 2 or any(
         type(value) is not int or value <= 0 for value in spatial_resolution
     ):
@@ -101,6 +119,8 @@ def generation_identity(
         "rollout_layout": layout_identity,
         "conditions_sha256": row["conditions_sha256"],
         "conditioning": conditioning,
+        "implementation_id": implementation_id,
+        "numeric_execution": numeric_execution,
         "sampler": sampler,
     }
     return {"generation_id": sha256(canonical_bytes(payload)), **payload}

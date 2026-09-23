@@ -36,6 +36,15 @@ def _identity(selection, row, **overrides):
             },
             "text": {"enabled": False},
         },
+        "implementation_id": "git:checkpoint-compatible-revision",
+        "numeric_execution": {
+            "parameter_dtype": "float32",
+            "autocast_dtype": "bfloat16",
+            "latent_dtype": "bfloat16",
+            "attention_backend": "math",
+            "torch_version": "2.8.0",
+            "tf32_enabled": False,
+        },
         "rollout_layout": VideoLayout.from_codec(
             fps=16,
             rgb_frame_count=961,
@@ -101,6 +110,18 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(
             selection,
             row,
+            numeric_execution={
+                "parameter_dtype": "float32",
+                "autocast_dtype": "none",
+                "latent_dtype": "float32",
+                "attention_backend": "math",
+                "torch_version": "2.8.0",
+                "tf32_enabled": False,
+            },
+        ),
+        _identity(
+            selection,
+            row,
             conditioning={
                 "camera": {
                     "enabled": True,
@@ -145,7 +166,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 11
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 12
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)
