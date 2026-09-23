@@ -76,10 +76,11 @@ def _verify_identity(identity: dict, selection: dict, row: dict) -> None:
             raise ValueError(f"generation identity has wrong {field}")
 
 
-def _link_once(source: Path, destination: Path) -> None:
+def _link_once(source: Path, destination: Path) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         os.symlink(source.resolve(strict=True), destination)
+        return True
     except FileExistsError:
         if not destination.is_symlink() or destination.resolve(
             strict=True
@@ -87,6 +88,7 @@ def _link_once(source: Path, destination: Path) -> None:
             raise FileExistsError(
                 f"official input already belongs to another output: {destination}"
             ) from None
+        return False
 
 
 def _validate_video(path: Path, row: dict) -> None:
@@ -99,7 +101,7 @@ def _validate_video(path: Path, row: dict) -> None:
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=nb_read_frames,avg_frame_rate",
+            "stream=nb_read_frames,avg_frame_rate,width,height",
             "-of",
             "json",
             str(path),
@@ -113,8 +115,11 @@ def _validate_video(path: Path, row: dict) -> None:
         len(streams) != 1
         or int(streams[0].get("nb_read_frames", 0)) != row["sanawm_frames"]
         or Fraction(streams[0]["avg_frame_rate"]) != row["fps"]
+        or (streams[0].get("width"), streams[0].get("height")) != (128, 128)
     ):
-        raise ValueError(f"generated video has wrong frames or FPS: {path}")
+        raise ValueError(
+            f"generated video has wrong frames, FPS, or resolution: {path}"
+        )
     subprocess.run(
         ["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"],
         check=True,
@@ -200,7 +205,6 @@ def stage_official_inputs(
             raise ValueError("generated video differs from its identity metadata")
         _validate_video(source, row)
         target = method_dir / row["split"] / f"{row['scene_id']}_generated.mp4"
-        _link_once(source, target)
         staged.append(
             {
                 "scene_id": row["scene_id"],
@@ -218,10 +222,18 @@ def stage_official_inputs(
             if row["split"] == split
         }
         actual = {path.name for path in (method_dir / split).glob("*_generated.mp4")}
-        if actual != expected:
+        if actual - expected:
             raise ValueError(
                 f"official video set differs from staged selection: {split}"
             )
+    for row in staged:
+        source = Path(row["source_video"])
+        target = Path(row["official_video"])
+        if target.exists() or target.is_symlink():
+            if not target.is_symlink() or target.resolve() != source:
+                raise FileExistsError(
+                    f"official input already belongs to another output: {target}"
+                )
     payload = {
         "schema_version": 1,
         "selection_id": selection["selection_id"],
@@ -237,7 +249,17 @@ def stage_official_inputs(
         },
         "staged": staged,
     }
-    write_immutable(method_dir / "staging.json", payload)
+    created = []
+    try:
+        for row in staged:
+            target = Path(row["official_video"])
+            if _link_once(Path(row["source_video"]), target):
+                created.append(target)
+        write_immutable(method_dir / "staging.json", payload)
+    except Exception:
+        for target in created:
+            target.unlink(missing_ok=True)
+        raise
     return payload
 
 

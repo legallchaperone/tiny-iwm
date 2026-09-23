@@ -34,6 +34,8 @@ revision, numerical settings and hardware backend, seed, and sampler. `claim_out
 matching `identity.json` into an identity-specific directory and rejects a
 conflicting claim. Generation and scoring should verify this identity before
 using any video from that directory.
+After writing `video.mp4`, generation calls `finalize_output_video` to publish
+`metadata.json` with the completed video's SHA-256. Staging checks this digest.
 Before creating an identity, it rehashes the selected image and camera files
 under the supplied source root, catching changes after CPU preparation.
 
@@ -59,7 +61,9 @@ requires a single compatible run identity across scenes, then links each
 an immutable `staging.json` recording the source commit, license, zero local
 modifications, selected scene identities, and source paths. Staging uses
 `ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count
-and FPS. It verifies the recorded video SHA-256 again before each scorer and
+and FPS, plus the formal 128 × 128 output size. `spatial_resolution` in the
+generation identity records the source image resolution, while the encoded
+rollout is 128 × 128. It verifies the recorded video SHA-256 again before each scorer and
 rejects any extra generated video in a scored split. If multiple
 generation identities exist for a scene, staging reports the
 available shared run IDs. Pass `--run-id sha256:...` and use a separate method

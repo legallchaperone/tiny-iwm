@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from core.video_layout import CodecTemporalSpec, VideoLayout
-from evaluation.identity import claim_output_directory, generation_identity
+from evaluation.identity import (
+    claim_output_directory,
+    finalize_output_video,
+    generation_identity,
+)
 from evaluation.official import (
     OFFICIAL_COMMIT,
     RUN_FIELDS,
@@ -123,14 +127,7 @@ def _fixture(tmp_path):
         directory = claim_output_directory(outputs, identity)
         video = directory / "video.mp4"
         video.write_bytes(b"fake video for directory adapter test")
-        (directory / "metadata.json").write_text(
-            json.dumps(
-                {
-                    "generation_id": identity["generation_id"],
-                    "video_sha256": sha256(video.read_bytes()),
-                }
-            )
-        )
+        finalize_output_video(directory, identity, {})
     return selection_path, benchmark, outputs, tmp_path / "method"
 
 
@@ -165,6 +162,15 @@ def test_staging_rejects_changed_metadata_or_missing_identity(tmp_path, monkeypa
     (next(paths[2].glob("simple_60s/game_style_001/*/identity.json"))).unlink()
     with pytest.raises(ValueError, match="expected one generation identity"):
         stage_official_inputs(*paths, seed=42)
+
+
+def test_staging_failure_leaves_no_partial_links(tmp_path, monkeypatch):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    paths = _fixture(tmp_path)
+    next(paths[2].glob("simple_60s/indoor_001/*/video.mp4")).unlink()
+    with pytest.raises(FileNotFoundError):
+        stage_official_inputs(*paths, seed=42)
+    assert not list(paths[3].rglob("*_generated.mp4"))
 
 
 def test_metric_commands_use_official_entry_points_and_pinned_protocol(tmp_path):
@@ -277,12 +283,21 @@ def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
         calls.append(command[0])
         return SimpleNamespace(
             stdout=json.dumps(
-                {"streams": [{"nb_read_frames": "960", "avg_frame_rate": "16/1"}]}
+                {
+                    "streams": [
+                        {
+                            "nb_read_frames": "960",
+                            "avg_frame_rate": "16/1",
+                            "width": 128,
+                            "height": 128,
+                        }
+                    ]
+                }
             )
         )
 
     monkeypatch.setattr("evaluation.official.subprocess.run", run)
-    with pytest.raises(ValueError, match="wrong frames or FPS"):
+    with pytest.raises(ValueError, match="wrong frames, FPS, or resolution"):
         _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 961, "fps": 16})
     assert calls == ["ffprobe"]
 
@@ -292,13 +307,44 @@ def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
         calls.append(command[0])
         return SimpleNamespace(
             stdout=json.dumps(
-                {"streams": [{"nb_read_frames": "961", "avg_frame_rate": "16/1"}]}
+                {
+                    "streams": [
+                        {
+                            "nb_read_frames": "961",
+                            "avg_frame_rate": "16/1",
+                            "width": 128,
+                            "height": 128,
+                        }
+                    ]
+                }
             )
         )
 
     monkeypatch.setattr("evaluation.official.subprocess.run", valid_run)
     _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 961, "fps": 16})
     assert calls == ["ffprobe", "ffmpeg"]
+
+
+def test_video_probe_rejects_wrong_resolution(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "evaluation.official.subprocess.run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            stdout=json.dumps(
+                {
+                    "streams": [
+                        {
+                            "nb_read_frames": "961",
+                            "avg_frame_rate": "16/1",
+                            "width": 256,
+                            "height": 256,
+                        }
+                    ]
+                }
+            )
+        ),
+    )
+    with pytest.raises(ValueError, match="resolution"):
+        _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 961, "fps": 16})
 
 
 def test_metric_commands_resolve_relative_paths(tmp_path, monkeypatch):
