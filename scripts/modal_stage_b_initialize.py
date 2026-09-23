@@ -142,13 +142,20 @@ def initialize(
 
 @app.local_entrypoint()
 def main(
-    output: str = str(ROOT / "artifacts" / "m4" / "cwx-24-stage-b-initialization.json"),
+    output: str = "",
     source_weights: str = "ema",
     destination_path: str = str(DESTINATION),
     run_id: str = "stage-b-sekai-subset-seed21-v1",
 ):
+    historical = ROOT / "artifacts" / "m4" / "cwx-24-stage-b-initialization.json"
+    destination = Path(output) if output else ROOT / "artifacts" / "m4" / (
+        "cwx-24-stage-b-initialization.json"
+        if source_weights == "ema"
+        else "cwx-26-stage-b-initialization.json"
+    )
+    if source_weights == "model" and destination.resolve() == historical.resolve():
+        raise ValueError("model-weight initialization must preserve the CWX-24 report")
     report = json.loads(initialize.remote(source_weights, destination_path, run_id))
-    destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(destination)
