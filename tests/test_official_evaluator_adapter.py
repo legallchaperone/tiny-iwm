@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -6,6 +8,7 @@ from core.video_layout import CodecTemporalSpec, VideoLayout
 from evaluation.identity import claim_output_directory, generation_identity
 from evaluation.official import (
     OFFICIAL_COMMIT,
+    _validate_video,
     metric_commands,
     score_official,
     stage_official_inputs,
@@ -121,7 +124,10 @@ def _fixture(tmp_path):
     return selection_path, benchmark, outputs, tmp_path / "method"
 
 
-def test_staging_preserves_separate_identity_and_official_output_names(tmp_path):
+def test_staging_preserves_separate_identity_and_official_output_names(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
     paths = _fixture(tmp_path)
     report = stage_official_inputs(*paths, seed=42)
     assert report["official_source"]["commit"] == OFFICIAL_COMMIT
@@ -135,7 +141,8 @@ def test_staging_preserves_separate_identity_and_official_output_names(tmp_path)
     assert stage_official_inputs(*paths, seed=42) == report
 
 
-def test_staging_rejects_changed_metadata_or_missing_identity(tmp_path):
+def test_staging_rejects_changed_metadata_or_missing_identity(tmp_path, monkeypatch):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
     paths = _fixture(tmp_path)
     (paths[1] / "kept.txt").write_bytes(b"different")
     with pytest.raises(ValueError, match="metadata hash differs"):
@@ -171,6 +178,8 @@ def test_metric_commands_use_official_entry_points_and_pinned_protocol(tmp_path)
 
 def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeypatch):
     paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
     monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
     commands = []
     monkeypatch.setattr(
@@ -180,3 +189,55 @@ def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeyp
     score_official(*paths, tmp_path / "Sana", seed=42)
     assert commands[0][1].endswith("eval_benchmark_poses.py")
     assert commands[1][1].endswith("eval_unified.py")
+
+
+def test_staging_rejects_unselected_video(tmp_path, monkeypatch):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    paths = _fixture(tmp_path)
+    extra = paths[3] / "simple_60s" / "other_generated.mp4"
+    extra.parent.mkdir(parents=True)
+    extra.write_bytes(b"stale video")
+    with pytest.raises(ValueError, match="video set differs"):
+        stage_official_inputs(*paths, seed=42)
+
+
+def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command[0])
+        return SimpleNamespace(
+            stdout=json.dumps(
+                {"streams": [{"nb_read_frames": "960", "avg_frame_rate": "16/1"}]}
+            )
+        )
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(ValueError, match="wrong frames or FPS"):
+        _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 961, "fps": 16})
+    assert calls == ["ffprobe"]
+
+    calls.clear()
+
+    def valid_run(command, **kwargs):
+        calls.append(command[0])
+        return SimpleNamespace(
+            stdout=json.dumps(
+                {"streams": [{"nb_read_frames": "961", "avg_frame_rate": "16/1"}]}
+            )
+        )
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", valid_run)
+    _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 961, "fps": 16})
+    assert calls == ["ffprobe", "ffmpeg"]
+
+
+def test_metric_commands_resolve_relative_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    metric, camera = metric_commands(
+        Path("Sana"), Path("benchmark"), Path("method"), "simple_60s"
+    )
+    assert metric[1] == str(tmp_path / "Sana/tools/metrics/sana_wm/eval_unified.py")
+    assert camera[camera.index("--result_folder") + 1] == str(
+        tmp_path / "method/simple_60s"
+    )

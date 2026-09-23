@@ -57,7 +57,9 @@ The `stage` command verifies the frozen metadata and each `identity.json`,
 requires a single compatible run identity across scenes, then links each
 `video.mp4` into the official `<split>/<scene>_generated.mp4` layout. It writes
 an immutable `staging.json` recording the source commit, license, zero local
-modifications, selected scene identities, and source paths. For example:
+modifications, selected scene identities, and source paths. Staging uses
+`ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count
+and FPS. It rejects any extra generated video in a scored split. For example:
 
 ```bash
 python -m evaluation.official stage \

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import json
 import os
 from pathlib import Path
@@ -87,6 +88,40 @@ def _link_once(source: Path, destination: Path) -> None:
             ) from None
 
 
+def _validate_video(path: Path, row: dict) -> None:
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-count_frames",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=nb_read_frames,avg_frame_rate",
+            "-of",
+            "json",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    streams = json.loads(probe.stdout).get("streams", [])
+    if (
+        len(streams) != 1
+        or int(streams[0].get("nb_read_frames", 0)) != row["sanawm_frames"]
+        or Fraction(streams[0]["avg_frame_rate"]) != row["fps"]
+    ):
+        raise ValueError(f"generated video has wrong frames or FPS: {path}")
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+
 def stage_official_inputs(
     selection_path: Path,
     benchmark_root: Path,
@@ -130,6 +165,7 @@ def stage_official_inputs(
         source = directory / "video.mp4"
         if not source.is_file():
             raise FileNotFoundError(source)
+        _validate_video(source, row)
         target = method_dir / row["split"] / f"{row['scene_id']}_generated.mp4"
         _link_once(source, target)
         staged.append(
@@ -141,6 +177,17 @@ def stage_official_inputs(
                 "official_video": str(target.absolute()),
             }
         )
+    for split in {row["split"] for row in chosen}:
+        expected = {
+            f"{row['scene_id']}_generated.mp4"
+            for row in chosen
+            if row["split"] == split
+        }
+        actual = {path.name for path in (method_dir / split).glob("*_generated.mp4")}
+        if actual != expected:
+            raise ValueError(
+                f"official video set differs from staged selection: {split}"
+            )
     payload = {
         "schema_version": 1,
         "selection_id": selection["selection_id"],
@@ -184,6 +231,9 @@ def metric_commands(
     """Build official entry-point commands without modifying metric semantics."""
     if split not in SPLIT_DIRS:
         raise ValueError("unsupported official split")
+    official_repo = official_repo.resolve()
+    benchmark_root = benchmark_root.resolve()
+    method_dir = method_dir.resolve()
     source = benchmark_root / SPLIT_DIRS[split]
     metric = [
         python,
@@ -240,6 +290,9 @@ def score_official(
     seed: int,
 ) -> None:
     """Rerun scoring from existing videos without invoking generation."""
+    official_repo = official_repo.resolve(strict=True)
+    benchmark_root = benchmark_root.resolve(strict=True)
+    method_dir = method_dir.resolve()
     _verify_official_checkout(official_repo)
     staged = stage_official_inputs(
         selection_path, benchmark_root, outputs_root, method_dir, seed=seed
