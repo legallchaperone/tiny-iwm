@@ -34,6 +34,8 @@ revision, numerical settings and hardware backend, seed, and sampler. `claim_out
 matching `identity.json` into an identity-specific directory and rejects a
 conflicting claim. Generation and scoring should verify this identity before
 using any video from that directory.
+After writing `video.mp4`, generation calls `finalize_output_video` to publish
+`metadata.json` with the completed video's SHA-256. Staging checks this digest.
 Before creating an identity, it rehashes the selected image and camera files
 under the supplied source root, catching changes after CPU preparation.
 
@@ -44,3 +46,48 @@ The shared `rollout_latents` enforces this policy when it is passed from the
 generation identity's sampler.
 Each row is generated alone (`batch_size: 1`) so its seeded noise stream does
 not depend on batch position or size.
+
+## Official metric adapter
+
+`evaluation.official` wraps Sana's unchanged metric entry points at commit
+`f9178744c096dcf2a2ea773da183e341bcbeb044` (Apache-2.0). No official
+source is vendored or modified. Keep that checkout and the benchmark release
+separate from model training and generation; install the upstream evaluation
+dependencies in a scoring environment only.
+
+The `stage` command verifies the frozen metadata and each `identity.json`,
+requires a single compatible run identity across scenes, then links each
+`video.mp4` into the official `<split>/<scene>_generated.mp4` layout. It writes
+an immutable `staging.json` recording the intended source commit and license,
+the unverified checkout state, selected scene identities, and source paths. Staging uses
+`ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count,
+constant 16 FPS frame timing, plus the formal 128 × 128 output size recorded in the generation
+identity. It verifies the recorded video SHA-256 again before each scorer and
+rejects any extra generated video in a scored split. If multiple
+generation identities exist for a scene, staging reports the
+available shared run IDs. Pass `--run-id sha256:...` and use a separate method
+directory for each run. The method path is resolved before links are recorded,
+so `stage` and `score` use the same path identity. For example:
+
+```bash
+python -m evaluation.official stage \
+  --selection data/manifests/sana_wm_eval_subset_v1.json \
+  --benchmark-root /path/to/SANA-WM-Bench \
+  --outputs-root /path/to/identity-outputs \
+  --method-dir /path/to/evaluation-method --seed 42
+```
+
+Run the same command with `score` and `--official-repo /path/to/Sana` to
+evaluate existing videos without regenerating them. The adapter pins the
+official checkout, rejects modified metric scripts, and calls the official
+VBench/revisit/temporal and Pi3 camera entry points. Their raw per-scene files
+remain under the method directory. After complete scoring and a second checkout
+check, `scoring.json` records the verified commit and zero local modifications,
+bound to the staged inputs and validated result JSON files by SHA-256. The
+frozen benchmark metadata is rehashed around every official scorer. Restaging
+clears the prior completion record before input checks. Rescoring also clears
+previous raw metric outputs before running the official scripts, then restores
+the record only after successful validation. It uses the official nine VBench dimensions,
+five revisit pairs per scene, 16 FPS reference, 10-second windows, and no
+first-frame skip for this unrefined model. Camera/Pi3 evaluation uses GPU, so
+run `stage` and validate video completeness on CPU before invoking `score`.

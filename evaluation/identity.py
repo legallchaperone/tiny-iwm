@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import tempfile
@@ -273,3 +274,28 @@ def verify_output_identity(directory: Path, identity: dict) -> None:
     recorded = json.loads((directory / "identity.json").read_text())
     if recorded != identity:
         raise ValueError("output directory belongs to a different generation identity")
+
+
+def finalize_output_video(directory: Path, identity: dict, metadata: dict) -> dict:
+    """Publish the completed video's checksum after generation, atomically."""
+    verify_output_identity(directory, identity)
+    video = directory / "video.mp4"
+    digest = hashlib.sha256()
+    with video.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    payload = {
+        **metadata,
+        "generation_id": identity["generation_id"],
+        "video_sha256": "sha256:" + digest.hexdigest(),
+    }
+    path = directory / "metadata.json"
+    data = json.dumps(payload, sort_keys=True, indent=2).encode() + b"\n"
+    with tempfile.NamedTemporaryFile(dir=directory, delete=False) as handle:
+        temporary = Path(handle.name)
+        handle.write(data)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return payload
