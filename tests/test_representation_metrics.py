@@ -156,3 +156,18 @@ def test_variant_comparison_requires_matched_token_rows(tmp_path):
     _write(right, "denoise", 8, "scene-c", [3, 5])
     with pytest.raises(ValueError, match="fixed sample/time/token"):
         compare_capture_roots(left, right)
+
+
+def test_variant_comparison_rejects_mixed_right_provenance(tmp_path):
+    left, right = tmp_path / "left", tmp_path / "right"
+    left.mkdir()
+    right.mkdir()
+    for root in (left, right):
+        for scene in ("a", "b"):
+            _write(root, "denoise", 8, scene, [1.0, 2.0])
+    path = right / "denoise-8-b.json"
+    record = json.loads(path.read_text())
+    record["checkpoint_id"] = "other-checkpoint"
+    path.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="right capture provenance"):
+        compare_capture_roots(left, right)

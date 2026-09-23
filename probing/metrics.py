@@ -159,7 +159,7 @@ def pair_captures(
     right: list[tuple[dict, torch.Tensor]],
     *,
     fixed_fields: tuple[str, ...] = PAIR_FIELDS,
-) -> tuple[list[torch.Tensor], list[torch.Tensor], list[dict]]:
+) -> tuple[list[torch.Tensor], list[torch.Tensor], list[dict], list[dict]]:
     """Join on every fixed variable; provenance/purpose may differ deliberately."""
     left_by_key = {
         _key(record, fixed_fields): (record, value) for record, value in left
@@ -176,6 +176,7 @@ def pair_captures(
         [left_by_key[key][1] for key in keys],
         [right_by_key[key][1] for key in keys],
         [left_by_key[key][0] for key in keys],
+        [right_by_key[key][0] for key in keys],
     )
 
 
@@ -229,7 +230,9 @@ def history_alignment(root: Path) -> dict:
     ]
     if not gt or not generated:
         raise ValueError("controlled GT and generated history records are required")
-    left, right, matched = pair_captures(gt, generated, fixed_fields=CONTROLLED_FIELDS)
+    left, right, matched, _ = pair_captures(
+        gt, generated, fixed_fields=CONTROLLED_FIELDS
+    )
     groups = defaultdict(list)
     for index, record in enumerate(matched):
         groups[_key(record, ALIGNMENT_GROUP_FIELDS)].append(index)
@@ -261,7 +264,7 @@ def history_alignment(root: Path) -> dict:
 
 def compare_capture_roots(left_root: Path, right_root: Path) -> dict:
     """Compare variants only where sample, time, token, and purpose match."""
-    left, right, records = pair_captures(
+    left, right, records, right_records = pair_captures(
         load_raw_capture(left_root),
         load_raw_capture(right_root),
         fixed_fields=VARIANT_FIELDS,
@@ -273,9 +276,19 @@ def compare_capture_roots(left_root: Path, right_root: Path) -> dict:
     for indices in groups.values():
         if len(indices) < 2:
             raise ValueError("each comparable layer/time group needs two observations")
+        right_provenance = {
+            _key(right_records[index], ("checkpoint_id", "config_id", "training_seed"))
+            for index in indices
+        }
+        if len(right_provenance) != 1:
+            raise ValueError("right capture provenance differs within comparison group")
         comparisons.append(
             {
                 **{field: records[indices[0]][field] for field in GROUP_FIELDS},
+                "right_provenance": {
+                    field: right_records[indices[0]][field]
+                    for field in ("checkpoint_id", "config_id", "training_seed")
+                },
                 **compare_features(
                     torch.stack([left[index] for index in indices]),
                     torch.stack([right[index] for index in indices]),
