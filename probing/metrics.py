@@ -62,7 +62,7 @@ def load_raw_capture(root: Path) -> list[tuple[dict, torch.Tensor]]:
         if "raw_file" not in record:
             continue
         raw = root / record["raw_file"]
-        if raw.parent != root or not raw.is_file():
+        if raw.parent != root or raw.is_symlink() or not raw.is_file():
             raise ValueError(f"missing or unsafe raw feature: {raw}")
         feature = torch.load(raw, map_location="cpu", weights_only=True)
         if feature.ndim != 1 or feature.numel() != record["channels"]:

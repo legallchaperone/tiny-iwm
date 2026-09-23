@@ -171,3 +171,16 @@ def test_variant_comparison_rejects_mixed_right_provenance(tmp_path):
     path.write_text(json.dumps(record))
     with pytest.raises(ValueError, match="right capture provenance"):
         compare_capture_roots(left, right)
+
+
+def test_capture_rejects_symlinked_raw_file(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    inside = tmp_path / "inside"
+    inside.mkdir()
+    _write(outside, "denoise", 8, "a", [1.0, 2.0])
+    record = json.loads((outside / "denoise-8-a.json").read_text())
+    (inside / "denoise-8-a.json").write_text(json.dumps(record))
+    (inside / record["raw_file"]).symlink_to(outside / record["raw_file"])
+    with pytest.raises(ValueError, match="unsafe raw feature"):
+        summarize_capture(inside)
