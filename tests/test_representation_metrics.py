@@ -51,6 +51,11 @@ def test_centered_spectrum_norms_and_cka_have_declared_axes():
     wider = torch.cat((matrix, matrix), dim=1)
     assert compare_features(matrix, wider)["centered_linear_cka"] == pytest.approx(1)
     assert compare_features(matrix, wider)["mean_row_cosine"] is None
+    tiny = torch.tensor([[1e-10, 0.0], [0.0, 1e-10]])
+    assert compare_features(tiny, tiny)["mean_row_cosine"] == pytest.approx(1)
+    zero = torch.zeros_like(tiny)
+    assert compare_features(zero, zero)["mean_row_cosine"] is None
+    assert compare_features(zero, zero)["cosine_valid_rows"] == 0
     assert describe_features(torch.tensor([[1.0], [3.0]]))["norm"]["median"] == 2.0
 
 

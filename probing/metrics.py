@@ -125,14 +125,29 @@ def compare_features(left: torch.Tensor, right: torch.Tensor) -> dict:
     denominator = torch.linalg.matrix_norm(x.T @ x) * torch.linalg.matrix_norm(y.T @ y)
     cka = None if float(denominator) == 0 else float(numerator / denominator)
     cosine = None
+    cosine_valid_rows = None
     l2_drift = None
     if left.shape[1] == right.shape[1]:
-        cosine = float(torch.nn.functional.cosine_similarity(left, right, dim=1).mean())
+        left64, right64 = left.to(torch.float64), right.to(torch.float64)
+        left_norm = torch.linalg.vector_norm(left64, dim=1)
+        right_norm = torch.linalg.vector_norm(right64, dim=1)
+        valid = (left_norm > 0) & (right_norm > 0)
+        cosine_valid_rows = int(valid.sum())
+        if cosine_valid_rows:
+            cosine = float(
+                (
+                    (left64[valid] / left_norm[valid, None])
+                    * (right64[valid] / right_norm[valid, None])
+                )
+                .sum(dim=1)
+                .mean()
+            )
         l2_drift = float(torch.linalg.vector_norm(left - right, dim=1).mean())
     return {
         "matched_observations": left.shape[0],
         "centered_linear_cka": cka,
         "mean_row_cosine": cosine,
+        "cosine_valid_rows": cosine_valid_rows,
         "mean_row_l2_drift": l2_drift,
     }
 
