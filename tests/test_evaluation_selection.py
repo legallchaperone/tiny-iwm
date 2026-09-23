@@ -1,9 +1,10 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from core.video_layout import CodecTemporalSpec, VideoLayout
+from core.video_layout import CodecTemporalSpec, FrameRange, VideoLayout
 from evaluation.identity import (
     claim_output_directory,
     generation_identity,
@@ -75,6 +76,13 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
     selection = _selection()
     row = selection["rows"][0]
     baseline = _identity(selection, row)
+    layout = VideoLayout.from_codec(
+        fps=16,
+        rgb_frame_count=961,
+        codec=CodecTemporalSpec(8),
+        latent_chunk_size=4,
+        initial_condition_frames=1,
+    )
     changes = [
         _identity(selection, row, checkpoint_id="sha256:" + "b" * 64),
         _identity(selection, row, weight_flavor="model"),
@@ -95,6 +103,17 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(
             selection,
             row,
+            rollout_layout=replace(
+                layout,
+                token_to_latent_ranges=(
+                    FrameRange(0, 2),
+                    *layout.token_to_latent_ranges[1:],
+                ),
+            ),
+        ),
+        _identity(
+            selection,
+            row,
             sampler={
                 "solver": "euler",
                 "steps": 26,
@@ -104,7 +123,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 9
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 10
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)

@@ -65,6 +65,9 @@ def generation_identity(
             [part.start, part.stop] for part in rollout_layout.latent_to_rgb
         ],
         "token_to_latent": list(rollout_layout.token_to_latent),
+        "token_to_latent_ranges": [
+            [part.start, part.stop] for part in rollout_layout.token_to_latent_ranges
+        ],
         "chunk_to_latent": [
             [part.start, part.stop] for part in rollout_layout.chunk_to_latent
         ],
