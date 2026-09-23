@@ -455,14 +455,15 @@ def score_official(
         metric, camera = metric_commands(
             official_repo, benchmark_root, method_dir, split
         )
+        split_videos = [row for row in staged["staged"] if row["split"] == split]
         for command in (camera, metric):
-            for row in staged["staged"]:
-                if (
-                    row["split"] == split
-                    and _file_sha256(Path(row["source_video"])) != row["video_sha256"]
-                ):
+            for row in split_videos:
+                if _file_sha256(Path(row["source_video"])) != row["video_sha256"]:
                     raise ValueError("staged video changed before official scoring")
             subprocess.run(command, cwd=official_repo, check=True)
+            for row in split_videos:
+                if _file_sha256(Path(row["source_video"])) != row["video_sha256"]:
+                    raise ValueError("staged video changed during official scoring")
         _verify_scored_split(
             method_dir, split, [row for row in selected_rows if row["split"] == split]
         )

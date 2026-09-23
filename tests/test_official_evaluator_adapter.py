@@ -384,7 +384,26 @@ def test_scoring_rechecks_video_between_official_metrics(tmp_path, monkeypatch):
         video.write_bytes(b"changed during scoring")
 
     monkeypatch.setattr("evaluation.official.subprocess.run", run)
-    with pytest.raises(ValueError, match="changed before official scoring"):
+    with pytest.raises(ValueError, match="changed during official scoring"):
+        score_official(*paths, tmp_path / "Sana", seed=42)
+
+
+def test_scoring_rechecks_video_after_final_metric(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    video = next(paths[2].glob("simple_60s/game_style_001/*/video.mp4"))
+    calls = 0
+
+    def run(command, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            video.write_bytes(b"changed during final scorer")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(ValueError, match="changed during official scoring"):
         score_official(*paths, tmp_path / "Sana", seed=42)
 
 
