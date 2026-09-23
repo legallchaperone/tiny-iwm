@@ -79,7 +79,7 @@ class HistorySession:
         if chunk.ndim != 5 or chunk.shape[1] != self.model.config.latent_channels:
             raise ValueError("chunk must have model-compatible [B, C, T, H, W] shape")
         expected = self.layout.latent_range_for_chunk(chunk_index)
-        start_latent = self._prefix_latents if chunk_index == 0 else expected.start
+        start_latent = max(self._prefix_latents, expected.start)
         if chunk.shape[2] != expected.stop - start_latent:
             raise ValueError("chunk latent length does not match VideoLayout")
         patch_time, patch_height, patch_width = self.model.config.patch_size
@@ -135,8 +135,9 @@ class HistorySession:
         )
         self._spatial_tokens = spatial
         self._prefix_latents = prefix_count
-        if prefix_count == self.layout.chunk_to_latent[0].stop:
-            self._next_chunk = 1
+        self._next_chunk = sum(
+            chunk.stop <= prefix_count for chunk in self.layout.chunk_to_latent
+        )
 
     def _camera(self, start: int, stop: int) -> TokenCameraProjection | None:
         if self.camera_projection is None:

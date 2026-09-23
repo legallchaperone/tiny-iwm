@@ -108,6 +108,11 @@ def controlled_replay(
         generated_history[:, :, :condition_count],
     ):
         raise ValueError("the real initial condition must remain fixed")
+    if not all(
+        torch.isfinite(value).all()
+        for value in (gt_history, generated_history, target_clean, target_noise)
+    ):
+        raise ValueError("replay histories, target, and noise must be finite")
     if (
         flow_time.shape != (1,)
         or not torch.isfinite(flow_time).all()
@@ -152,6 +157,10 @@ def controlled_replay(
             )
         )
     gt_prediction, generated_prediction = predictions
+    if not torch.isfinite(gt_prediction).all() or not torch.isfinite(
+        generated_prediction
+    ).all():
+        raise ValueError("replay predictions must be finite")
     difference = (generated_prediction - gt_prediction).float()
     target = target_velocity(target_clean, target_noise).float()
     report = {

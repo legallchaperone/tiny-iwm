@@ -107,3 +107,30 @@ def test_controlled_replay_fixes_full_initial_prefix():
     arguments["generated_history"][:, :, 1] += 1
     with pytest.raises(ValueError, match="initial condition"):
         controlled_replay(model, layout, **arguments)
+
+
+def test_controlled_replay_handles_initial_prefix_across_chunks():
+    model, _, arguments = _inputs()
+    layout = VideoLayout.from_codec(
+        fps=1,
+        rgb_frame_count=7,
+        codec=CodecTemporalSpec(1),
+        latent_chunk_size=2,
+        initial_condition_frames=3,
+    )
+    arguments["gt_history"] = torch.randn(1, 2, 4, 2, 2)
+    arguments["generated_history"] = arguments["gt_history"].clone()
+    arguments["generated_history"][:, :, 3] += 0.5
+    arguments["target_chunk"] = 2
+    arguments["camera_projection"] = None
+    result = controlled_replay(model, layout, **arguments)
+    assert result.report["target_chunk"] == 2
+    assert result.report["metrics"]["prediction_max_abs_delta"] > 0
+
+
+def test_controlled_replay_rejects_nonfinite_history():
+    model, layout, arguments = _inputs()
+    arguments["generated_history"] = arguments["generated_history"].clone()
+    arguments["generated_history"][:, :, 1] = float("nan")
+    with pytest.raises(ValueError, match="must be finite"):
+        controlled_replay(model, layout, **arguments)
