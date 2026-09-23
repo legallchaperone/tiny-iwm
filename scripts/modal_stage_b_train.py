@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import random
@@ -87,8 +88,11 @@ def inspect_inputs() -> str:
     del payload
     for split in ("train", "validation"):
         for record in manifest["splits"][split]:
-            if not Path(record["prepared_path"]).is_file():
-                raise FileNotFoundError(record["prepared_path"])
+            prepared = Path(record["prepared_path"])
+            if _file_id(prepared) != record["sha256"]:
+                raise ValueError(
+                    f"prepared sample failed SHA-256 verification: {prepared}"
+                )
     return json.dumps(
         {
             "status": "passed",
@@ -414,11 +418,16 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 reference = session.predict(
                     identity, chunk_index, target, t, mode="reference"
                 )
+                if (
+                    not torch.isfinite(cached).all()
+                    or not torch.isfinite(reference).all()
+                ):
+                    raise AssertionError("non-finite cached/reference prediction")
                 delta = float((cached - reference).abs().max())
                 deltas.append(
                     {"chunk": chunk_index, "flow_time": value, "max_abs_delta": delta}
                 )
-                if delta > 0.05:
+                if not math.isfinite(delta) or delta > 0.05:
                     raise AssertionError(
                         f"cached/reference delta {delta} exceeds BF16 tolerance"
                     )
@@ -494,9 +503,15 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 visibility_mask=mask,
                 camera_projection=projection,
             )[:, :, 4:8]
+        if any(not torch.isfinite(value).all() for value in (*outputs, repeat)):
+            raise AssertionError("non-finite leakage prediction")
         repeat_delta = float((outputs[0] - repeat).abs().max())
         future_delta = float((outputs[0] - outputs[1]).abs().max())
         target_delta = float((outputs[0] - outputs[2]).abs().max())
+        if not all(
+            math.isfinite(value) for value in (repeat_delta, future_delta, target_delta)
+        ):
+            raise AssertionError("non-finite leakage comparison")
         if max(future_delta, target_delta) > max(0.05, 2 * repeat_delta):
             raise AssertionError(
                 "Stage B target or future clean branch leaked into target output"
