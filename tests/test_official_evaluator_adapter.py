@@ -156,6 +156,17 @@ def test_staging_preserves_separate_identity_and_official_output_names(
     assert stage_official_inputs(*paths, seed=42) == report
 
 
+def test_stage_normalizes_method_path_before_recording_links(tmp_path, monkeypatch):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    paths = _fixture(tmp_path)
+    paths[3].mkdir()
+    alias = tmp_path / "method-alias"
+    alias.symlink_to(paths[3], target_is_directory=True)
+    report = stage_official_inputs(*paths[:3], alias, seed=42)
+    assert all(str(paths[3]) in row["official_video"] for row in report["staged"])
+    assert stage_official_inputs(*paths, seed=42) == report
+
+
 def test_staging_rejects_changed_metadata_or_missing_identity(tmp_path, monkeypatch):
     monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
     paths = _fixture(tmp_path)
@@ -648,10 +659,14 @@ def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
                         {
                             "nb_read_frames": "961",
                             "avg_frame_rate": "16/1",
+                            "time_base": "1/16",
                             "width": 128,
                             "height": 128,
                         }
-                    ]
+                    ],
+                    "frames": [
+                        {"best_effort_timestamp": str(index)} for index in range(961)
+                    ],
                 }
             )
         )
@@ -659,6 +674,32 @@ def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):
     monkeypatch.setattr("evaluation.official.subprocess.run", valid_run)
     _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 961, "fps": 16})
     assert calls == ["ffprobe", "ffmpeg"]
+
+
+def test_video_probe_rejects_variable_frame_timing(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "evaluation.official.subprocess.run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            stdout=json.dumps(
+                {
+                    "streams": [
+                        {
+                            "nb_read_frames": "3",
+                            "avg_frame_rate": "16/1",
+                            "time_base": "1/16",
+                            "width": 128,
+                            "height": 128,
+                        }
+                    ],
+                    "frames": [
+                        {"best_effort_timestamp": value} for value in ("0", "1", "3")
+                    ],
+                }
+            )
+        ),
+    )
+    with pytest.raises(ValueError, match="variable frame timing"):
+        _validate_video(tmp_path / "video.mp4", {"sanawm_frames": 3, "fps": 16})
 
 
 def test_video_probe_rejects_wrong_resolution(tmp_path, monkeypatch):

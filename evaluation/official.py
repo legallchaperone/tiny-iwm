@@ -107,10 +107,11 @@ def _validate_video(path: Path, row: dict) -> None:
             "-v",
             "error",
             "-count_frames",
+            "-show_frames",
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=nb_read_frames,avg_frame_rate,width,height",
+            "stream=nb_read_frames,avg_frame_rate,time_base,width,height:frame=best_effort_timestamp",
             "-of",
             "json",
             str(path),
@@ -119,7 +120,8 @@ def _validate_video(path: Path, row: dict) -> None:
         capture_output=True,
         text=True,
     )
-    streams = json.loads(probe.stdout).get("streams", [])
+    probe_data = json.loads(probe.stdout)
+    streams = probe_data.get("streams", [])
     if (
         len(streams) != 1
         or int(streams[0].get("nb_read_frames", 0)) != row["sanawm_frames"]
@@ -129,6 +131,23 @@ def _validate_video(path: Path, row: dict) -> None:
         raise ValueError(
             f"generated video has wrong frames, FPS, or resolution: {path}"
         )
+    frames = probe_data.get("frames", [])
+    try:
+        time_base = Fraction(streams[0]["time_base"])
+        timestamps = [
+            Fraction(frame["best_effort_timestamp"]) * time_base for frame in frames
+        ]
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        raise ValueError(
+            f"generated video has missing frame timestamps: {path}"
+        ) from None
+    expected_step = Fraction(1, row["fps"])
+    tolerance = min(time_base, expected_step / 4)
+    if len(timestamps) != row["sanawm_frames"] or any(
+        step <= 0 or abs(step - expected_step) > tolerance
+        for step in (b - a for a, b in zip(timestamps, timestamps[1:]))
+    ):
+        raise ValueError(f"generated video has variable frame timing: {path}")
     subprocess.run(
         ["ffmpeg", "-v", "error", "-xerror", "-i", str(path), "-f", "null", "-"],
         check=True,
@@ -155,6 +174,7 @@ def stage_official_inputs(
     run_id: str | None = None,
 ) -> dict:
     """Adapt directory format only; never edit metric code or generated videos."""
+    method_dir = method_dir.resolve()
     selection = _selection(selection_path)
     _verify_metadata(selection, benchmark_root)
     chosen = [row for row in selection["rows"] if row["generation_seed"] == seed]

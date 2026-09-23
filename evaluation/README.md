@@ -60,13 +60,14 @@ requires a single compatible run identity across scenes, then links each
 `video.mp4` into the official `<split>/<scene>_generated.mp4` layout. It writes
 an immutable `staging.json` recording the intended source commit and license,
 the unverified checkout state, selected scene identities, and source paths. Staging uses
-`ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count
-and FPS, plus the formal 128 × 128 output size recorded in the generation
+`ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count,
+constant 16 FPS frame timing, plus the formal 128 × 128 output size recorded in the generation
 identity. It verifies the recorded video SHA-256 again before each scorer and
 rejects any extra generated video in a scored split. If multiple
 generation identities exist for a scene, staging reports the
 available shared run IDs. Pass `--run-id sha256:...` and use a separate method
-directory for each run. For example:
+directory for each run. The method path is resolved before links are recorded,
+so `stage` and `score` use the same path identity. For example:
 
 ```bash
 python -m evaluation.official stage \
