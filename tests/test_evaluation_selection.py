@@ -26,8 +26,36 @@ def _selection():
     return json.loads(MANIFEST.read_text())
 
 
+class _AssetSelection(dict):
+    def __init__(self, value, source_root):
+        super().__init__(value)
+        self.source_root = source_root
+
+
+def _selection_with_assets(source_root):
+    selection = _selection()
+    for row in selection["rows"]:
+        conditions = row["conditions"]
+        for kind in ("image", "camera"):
+            relative = conditions[f"{kind}_path"]
+            path = source_root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(relative.encode())
+            digest = sha256(path.read_bytes())
+            conditions[f"{kind}_sha256"] = digest
+            selection["source_sha256"][relative] = digest
+        row["conditions_sha256"] = sha256(canonical_bytes(conditions))
+    selection["selection_id"] = sha256(
+        canonical_bytes(
+            {key: value for key, value in selection.items() if key != "selection_id"}
+        )
+    )
+    return _AssetSelection(selection, source_root)
+
+
 def _identity(selection, row, **overrides):
     inputs = {
+        "source_root": selection.source_root,
         "checkpoint_id": "sha256:" + "a" * 64,
         "weight_flavor": "ema",
         "model_config": {
@@ -127,7 +155,7 @@ def test_frozen_subset_preserves_official_minute_protocol():
 
 
 def test_generation_identity_separates_all_variable_inputs(tmp_path):
-    selection = _selection()
+    selection = _selection_with_assets(tmp_path)
     row = selection["rows"][0]
     baseline = _identity(selection, row)
     layout = VideoLayout.from_codec(
@@ -253,7 +281,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
 
 
 def test_tampering_and_replacement_are_rejected(tmp_path):
-    selection = _selection()
+    selection = _selection_with_assets(tmp_path)
     row = selection["rows"][0]
     identity = _identity(selection, row)
     with pytest.raises(ValueError, match="source-image prefix"):
@@ -276,7 +304,13 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
                 initial_condition_frames=9,
             ),
         )
-    changed_selection = dict(selection)
+    image = tmp_path / row["conditions"]["image_path"]
+    original = image.read_bytes()
+    image.write_bytes(b"modified selected image")
+    with pytest.raises(ValueError, match="selected image asset differs"):
+        _identity(selection, row)
+    image.write_bytes(original)
+    changed_selection = _AssetSelection(selection, tmp_path)
     changed_selection["dataset_revision"] = "0" * 40
     with pytest.raises(ValueError, match="selection content differs"):
         _identity(changed_selection, row)
@@ -290,8 +324,8 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
         write_immutable(path, changed_selection)
 
 
-def test_enabled_text_and_codec_require_immutable_fingerprints():
-    selection = _selection()
+def test_enabled_text_and_codec_require_immutable_fingerprints(tmp_path):
+    selection = _selection_with_assets(tmp_path)
     row = selection["rows"][0]
     baseline = _identity(selection, row)
     with pytest.raises(ValueError, match="encoder fingerprint"):
@@ -320,7 +354,7 @@ def test_generation_claim_works_on_volume_without_hard_links(tmp_path, monkeypat
         raise PermissionError("hard links unsupported")
 
     monkeypatch.setattr("evaluation.selection.os.link", unsupported_hard_link)
-    selection = _selection()
+    selection = _selection_with_assets(tmp_path)
     identity = _identity(selection, selection["rows"][0])
     directory = claim_output_directory(tmp_path, identity)
     assert claim_output_directory(tmp_path, identity) == directory

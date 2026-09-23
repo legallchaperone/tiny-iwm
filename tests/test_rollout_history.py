@@ -105,3 +105,20 @@ def test_single_frame_initial_condition_inside_first_chunk_matches_reference():
     )
     assert cached.shape == (1, 2, 6, 2, 2)
     torch.testing.assert_close(cached, reference, atol=2e-5, rtol=2e-5)
+
+
+def test_source_image_only_rollout_rejects_prefilled_history():
+    model, layout, identity, camera = _setup(initial_frames=1)
+    initial = torch.randn(1, 2, 1, 2, 2)
+    extra = torch.randn(1, 2, 1, 2, 2)
+    with pytest.raises(ValueError, match="rejects extra clean chunks"):
+        rollout_latents(
+            model,
+            layout,
+            identity,
+            (initial, extra),
+            steps=2,
+            seed=7,
+            initial_history_policy="source_image_only",
+            camera_projection=camera,
+        )

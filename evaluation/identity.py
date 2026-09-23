@@ -25,6 +25,7 @@ def generation_identity(
     selection: dict,
     row: dict,
     *,
+    source_root: Path,
     checkpoint_id: str,
     weight_flavor: str,
     model_config: dict,
@@ -47,6 +48,19 @@ def generation_identity(
         )
     ):
         raise ValueError("selection content differs from its immutable identity")
+    for kind in ("image", "camera"):
+        relative = Path(row["conditions"][f"{kind}_path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"unsafe selected {kind} path")
+        asset = (source_root / relative).resolve(strict=True)
+        if not asset.is_relative_to(source_root.resolve()):
+            raise ValueError(f"selected {kind} path escapes source root")
+        actual = sha256(asset.read_bytes())
+        if (
+            actual != row["conditions"][f"{kind}_sha256"]
+            or actual != selection["source_sha256"][relative.as_posix()]
+        ):
+            raise ValueError(f"selected {kind} asset differs from frozen selection")
     if not _is_sha256(checkpoint_id):
         raise ValueError("checkpoint_id must be a SHA-256 digest")
     if weight_flavor not in {"model", "ema"}:

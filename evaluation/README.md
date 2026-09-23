@@ -34,9 +34,13 @@ revision, numerical settings and hardware backend, seed, and sampler. `claim_out
 matching `identity.json` into an identity-specific directory and rejects a
 conflicting claim. Generation and scoring should verify this identity before
 using any video from that directory.
+Before creating an identity, it rehashes the selected image and camera files
+under the supplied source root, catching changes after CPU preparation.
 
 Official generation admits only the source-image initial prefix. The sampler
 records `initial_history_policy: source_image_only`; a resumed or prefetched
 rollout with additional clean chunks is outside this evaluation identity.
+The shared `rollout_latents` enforces this policy when it is passed from the
+generation identity's sampler.
 Each row is generated alone (`batch_size: 1`) so its seeded noise stream does
 not depend on batch position or size.
