@@ -206,3 +206,18 @@ def test_failed_metadata_publication_removes_raw_tensor(tmp_path, monkeypatch):
     assert recorder.raw_bytes == 0
     assert list(tmp_path.glob("*.pt")) == []
     assert list(tmp_path.glob("*.json")) == []
+
+
+def test_duplicate_points_are_rejected_and_empty_tokens_skip_capture(tmp_path):
+    with pytest.raises(ValueError, match="points must be unique"):
+        FeatureRecorder(tmp_path, points=("final_norm", "final_norm"))
+    model = _model()
+    recorder = FeatureRecorder(tmp_path, points=("final_norm",), tokens=())
+    latents = torch.randn(1, 4, 2, 4, 4)
+    time = torch.tensor([0.5])
+    expected = model(latents, time)
+    actual = capture_forward(
+        model, latents, time, context=_context(), recorder=recorder
+    )
+    assert torch.equal(actual, expected)
+    assert list(tmp_path.glob("*.json")) == []

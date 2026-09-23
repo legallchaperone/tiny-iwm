@@ -74,6 +74,8 @@ class FeatureRecorder:
     ) -> None:
         if max_records < 0 or max_raw_bytes < 0 or not raw_points <= set(points):
             raise ValueError("invalid feature capture bounds or raw points")
+        if len(set(points)) != len(points):
+            raise ValueError("feature capture points must be unique")
         if len({token.index for token in tokens}) != len(tokens) or any(
             token.index < 0 or not token.token_type for token in tokens
         ):
@@ -213,7 +215,7 @@ def capture_forward(
     **model_kwargs,
 ):
     """Run the shared model once and return its normal output/cache shape."""
-    if not recorder.points or _RECOMPUTING.get():
+    if not recorder.points or not recorder.tokens or _RECOMPUTING.get():
         return model(latents, timestep, **model_kwargs)
     result = model(latents, timestep, capture=recorder.points, **model_kwargs)
     if model_kwargs.get("return_kv_cache", False):
