@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from core.video_layout import VideoLayout
+
 from .selection import canonical_bytes, sha256, write_immutable
 
 
@@ -17,6 +19,7 @@ def generation_identity(
     codec_id: str,
     spatial_resolution: tuple[int, int],
     preprocessing_id: str,
+    rollout_layout: VideoLayout,
     sampler: dict,
 ) -> dict:
     """Hash every input that can change a generated trajectory."""
@@ -45,6 +48,27 @@ def generation_identity(
     required_sampler = {"solver", "steps", "cfg_scale", "history_policy"}
     if not required_sampler <= sampler.keys():
         raise ValueError("sampler must identify solver, steps, CFG, and history policy")
+    if (
+        rollout_layout.valid_rgb_frame_count != row["sanawm_frames"]
+        or rollout_layout.fps != row["fps"]
+    ):
+        raise ValueError("rollout layout differs from the selected official trajectory")
+    layout_identity = {
+        "rgb_frame_count": rollout_layout.rgb_frame_count,
+        "valid_rgb_frame_count": rollout_layout.valid_rgb_frame_count,
+        "latent_frame_count": rollout_layout.latent_frame_count,
+        "initial_condition_rgb": [
+            rollout_layout.initial_condition_rgb.start,
+            rollout_layout.initial_condition_rgb.stop,
+        ],
+        "latent_to_rgb": [
+            [part.start, part.stop] for part in rollout_layout.latent_to_rgb
+        ],
+        "token_to_latent": list(rollout_layout.token_to_latent),
+        "chunk_to_latent": [
+            [part.start, part.stop] for part in rollout_layout.chunk_to_latent
+        ],
+    }
     payload = {
         "schema_version": 1,
         "selection_id": selection["selection_id"],
@@ -57,6 +81,7 @@ def generation_identity(
         "codec_id": codec_id,
         "spatial_resolution": list(spatial_resolution),
         "preprocessing_id": preprocessing_id,
+        "rollout_layout": layout_identity,
         "conditions_sha256": row["conditions_sha256"],
         "sampler": sampler,
     }

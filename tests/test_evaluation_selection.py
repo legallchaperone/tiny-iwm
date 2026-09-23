@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from core.video_layout import CodecTemporalSpec, VideoLayout
 from evaluation.identity import (
     claim_output_directory,
     generation_identity,
@@ -25,6 +26,13 @@ def _identity(selection, row, **overrides):
         "codec_id": "LTX2VAE_diffusers_704x1280_official_latent_cache",
         "spatial_resolution": (704, 1280),
         "preprocessing_id": "official_center_crop_v1",
+        "rollout_layout": VideoLayout.from_codec(
+            fps=16,
+            rgb_frame_count=961,
+            codec=CodecTemporalSpec(8),
+            latent_chunk_size=4,
+            initial_condition_frames=1,
+        ),
         "sampler": {
             "solver": "euler",
             "steps": 25,
@@ -76,6 +84,17 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(
             selection,
             row,
+            rollout_layout=VideoLayout.from_codec(
+                fps=16,
+                rgb_frame_count=961,
+                codec=CodecTemporalSpec(8),
+                latent_chunk_size=8,
+                initial_condition_frames=1,
+            ),
+        ),
+        _identity(
+            selection,
+            row,
             sampler={
                 "solver": "euler",
                 "steps": 26,
@@ -85,7 +104,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 8
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 9
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)
