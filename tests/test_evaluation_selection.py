@@ -31,6 +31,12 @@ def _identity(selection, row, **overrides):
         "checkpoint_id": "sha256:" + "a" * 64,
         "weight_flavor": "ema",
         "codec_id": "LTX2VAE_diffusers_704x1280_official_latent_cache",
+        "codec_fingerprint": {
+            "weights_sha256": "sha256:" + "c" * 64,
+            "normalization_sha256": "sha256:" + "d" * 64,
+            "encoding_policy": "bidirectional_mode_v1",
+            "implementation_revision": "diffusers:0.37.0",
+        },
         "spatial_resolution": (704, 1280),
         "preprocessing_id": "official_center_crop_v1",
         "conditioning": {
@@ -119,6 +125,14 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(selection, row, checkpoint_id="sha256:" + "b" * 64),
         _identity(selection, row, weight_flavor="model"),
         _identity(selection, row, codec_id="other-codec"),
+        _identity(
+            selection,
+            row,
+            codec_fingerprint={
+                **baseline["codec_fingerprint"],
+                "weights_sha256": "sha256:" + "e" * 64,
+            },
+        ),
         _identity(selection, row, spatial_resolution=(128, 128)),
         _identity(selection, row, preprocessing_id="other-crop"),
         _identity(
@@ -158,6 +172,14 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(
             selection,
             row,
+            conditioning={
+                **baseline["conditioning"],
+                "text": {"enabled": True, "encoder_fingerprint": "sha256:" + "f" * 64},
+            },
+        ),
+        _identity(
+            selection,
+            row,
             rollout_layout=VideoLayout.from_codec(
                 fps=16,
                 rgb_frame_count=961,
@@ -189,7 +211,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 13
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 15
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)
@@ -213,6 +235,20 @@ def test_tampering_and_replacement_are_rejected(tmp_path):
     write_immutable(path, selection)
     with pytest.raises(FileExistsError, match="immutable selection"):
         write_immutable(path, changed_selection)
+
+
+def test_enabled_text_and_codec_require_immutable_fingerprints():
+    selection = _selection()
+    row = selection["rows"][0]
+    baseline = _identity(selection, row)
+    with pytest.raises(ValueError, match="encoder fingerprint"):
+        _identity(
+            selection,
+            row,
+            conditioning={**baseline["conditioning"], "text": {"enabled": True}},
+        )
+    with pytest.raises(ValueError, match="codec fingerprint"):
+        _identity(selection, row, codec_fingerprint={"weights_sha256": "label"})
 
 
 def test_identical_concurrent_claim_is_idempotent(tmp_path, monkeypatch):

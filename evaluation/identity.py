@@ -10,6 +10,15 @@ from core.video_layout import VideoLayout
 from .selection import canonical_bytes, sha256, write_immutable
 
 
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and value.startswith("sha256:")
+        and len(value) == 71
+        and all(c in "0123456789abcdef" for c in value[7:])
+    )
+
+
 def generation_identity(
     selection: dict,
     row: dict,
@@ -17,6 +26,7 @@ def generation_identity(
     checkpoint_id: str,
     weight_flavor: str,
     codec_id: str,
+    codec_fingerprint: dict,
     spatial_resolution: tuple[int, int],
     preprocessing_id: str,
     rollout_layout: VideoLayout,
@@ -34,17 +44,34 @@ def generation_identity(
         )
     ):
         raise ValueError("selection content differs from its immutable identity")
-    if (
-        not checkpoint_id.startswith("sha256:")
-        or len(checkpoint_id) != 71
-        or any(c not in "0123456789abcdef" for c in checkpoint_id[7:])
-    ):
+    if not _is_sha256(checkpoint_id):
         raise ValueError("checkpoint_id must be a SHA-256 digest")
     if weight_flavor not in {"model", "ema"}:
         raise ValueError("weight_flavor must be model or ema")
     if not codec_id or not preprocessing_id or not implementation_id or not sampler:
         raise ValueError(
             "codec, preprocessing, implementation, and sampler must be explicit"
+        )
+    if (
+        not isinstance(codec_fingerprint, dict)
+        or not {
+            "weights_sha256",
+            "normalization_sha256",
+            "encoding_policy",
+            "implementation_revision",
+        }
+        <= codec_fingerprint.keys()
+        or not all(
+            _is_sha256(codec_fingerprint[key])
+            for key in ("weights_sha256", "normalization_sha256")
+        )
+        or not all(
+            codec_fingerprint[key]
+            for key in ("encoding_policy", "implementation_revision")
+        )
+    ):
+        raise ValueError(
+            "codec fingerprint must identify weights, normalization, policy, and implementation"
         )
     if (
         not {
@@ -97,6 +124,8 @@ def generation_identity(
         raise ValueError(
             "enabled camera conditioning requires method, scale, and projection size"
         )
+    if text["enabled"] and not _is_sha256(text.get("encoder_fingerprint")):
+        raise ValueError("enabled text conditioning requires an encoder fingerprint")
     if (
         rollout_layout.valid_rgb_frame_count != row["sanawm_frames"]
         or rollout_layout.fps != row["fps"]
@@ -131,6 +160,7 @@ def generation_identity(
         "checkpoint_id": checkpoint_id,
         "weight_flavor": weight_flavor,
         "codec_id": codec_id,
+        "codec_fingerprint": codec_fingerprint,
         "spatial_resolution": list(spatial_resolution),
         "preprocessing_id": preprocessing_id,
         "rollout_layout": layout_identity,
