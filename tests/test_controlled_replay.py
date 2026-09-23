@@ -149,6 +149,26 @@ def test_controlled_replay_handles_target_inside_condition_chunk():
     assert result.report["metrics"]["prediction_max_abs_delta"] == 0
 
 
+def test_controlled_replay_handles_first_partially_conditioned_chunk():
+    model, layout, arguments = _inputs()
+    layout = VideoLayout.from_codec(
+        fps=1,
+        rgb_frame_count=6,
+        codec=CodecTemporalSpec(1),
+        latent_chunk_size=2,
+        initial_condition_frames=1,
+    )
+    arguments["gt_history"] = torch.randn(1, 2, 1, 2, 2)
+    arguments["generated_history"] = arguments["gt_history"].clone()
+    arguments["target_clean"] = torch.randn(1, 2, 1, 2, 2)
+    arguments["target_noise"] = torch.randn_like(arguments["target_clean"])
+    arguments["target_chunk"] = 0
+    arguments["camera_projection"] = None
+    result = controlled_replay(model, layout, **arguments)
+    assert result.report["rollout_time_rgb_frame"] == 1
+    assert result.report["metrics"]["prediction_max_abs_delta"] == 0
+
+
 def test_controlled_replay_rejects_nonfinite_history():
     model, layout, arguments = _inputs()
     arguments["generated_history"] = arguments["generated_history"].clone()

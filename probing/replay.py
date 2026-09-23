@@ -79,7 +79,7 @@ def controlled_replay(
     recorder: FeatureRecorder | None = None,
 ) -> ControlledReplayResult:
     """Change only clean history source; preserve target, noise, time and camera."""
-    if model.training or not 1 <= target_chunk < len(layout.chunk_to_latent):
+    if model.training or not 0 <= target_chunk < len(layout.chunk_to_latent):
         raise ValueError(
             "controlled replay requires eval mode and a history-bearing target"
         )
