@@ -84,9 +84,15 @@ def controlled_replay(
             "controlled replay requires eval mode and a history-bearing target"
         )
     target_range = layout.latent_range_for_chunk(target_chunk)
+    condition_count = sum(
+        part.stop <= layout.initial_condition_rgb.stop for part in layout.latent_to_rgb
+    )
+    target_start = max(target_range.start, condition_count)
+    if target_start >= target_range.stop:
+        raise ValueError("selected chunk has no unconditioned target latents")
     if (
         gt_history.shape != generated_history.shape
-        or gt_history.shape[2] != target_range.start
+        or gt_history.shape[2] != target_start
     ):
         raise ValueError("both histories must cover exactly the same clean prefix")
     if (
@@ -96,14 +102,11 @@ def controlled_replay(
     ):
         raise ValueError("controlled replay requires paired batch-one target and noise")
     if (
-        target_clean.shape[2] != len(target_range)
+        target_clean.shape[2] != target_range.stop - target_start
         or gt_history.shape[:2] + gt_history.shape[3:]
         != target_clean.shape[:2] + target_clean.shape[3:]
     ):
         raise ValueError("target geometry must match the selected layout and history")
-    condition_count = sum(
-        part.stop <= layout.initial_condition_rgb.stop for part in layout.latent_to_rgb
-    )
     if not torch.equal(
         gt_history[:, :, :condition_count],
         generated_history[:, :, :condition_count],
@@ -141,7 +144,7 @@ def controlled_replay(
             generation_seed=generation_seed,
             checkpoint_id=checkpoint_id,
             config_id=config_id,
-            rollout_time=layout.rgb_range_for_latent(target_range.start).start,
+            rollout_time=layout.rgb_range_for_latent(target_start).start,
             flow_time=float(flow_time[0]),
             branch="conditional",
             forward_purpose=purpose,
@@ -189,7 +192,7 @@ def controlled_replay(
         "training_seed": training_seed,
         "generation_seed": generation_seed,
         "target_chunk": target_chunk,
-        "rollout_time_rgb_frame": layout.rgb_range_for_latent(target_range.start).start,
+        "rollout_time_rgb_frame": layout.rgb_range_for_latent(target_start).start,
         "fm_time": float(flow_time[0]),
         "fixed": {
             "target_clean_sha256": _tensor_sha256(target_clean),
