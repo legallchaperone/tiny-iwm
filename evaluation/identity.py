@@ -20,6 +20,7 @@ def generation_identity(
     spatial_resolution: tuple[int, int],
     preprocessing_id: str,
     rollout_layout: VideoLayout,
+    conditioning: dict,
     sampler: dict,
 ) -> dict:
     """Hash every input that can change a generated trajectory."""
@@ -48,6 +49,19 @@ def generation_identity(
     required_sampler = {"solver", "steps", "cfg_scale", "history_policy"}
     if not required_sampler <= sampler.keys():
         raise ValueError("sampler must identify solver, steps, CFG, and history policy")
+    if not {"camera", "text"} <= conditioning.keys():
+        raise ValueError("conditioning must identify camera and text branches")
+    camera, text = conditioning["camera"], conditioning["text"]
+    if type(camera.get("enabled")) is not bool or type(text.get("enabled")) is not bool:
+        raise ValueError("camera and text enabled flags must be explicit booleans")
+    if (
+        camera["enabled"]
+        and not {"method", "translation_scale", "projection_image_size"}
+        <= camera.keys()
+    ):
+        raise ValueError(
+            "enabled camera conditioning requires method, scale, and projection size"
+        )
     if (
         rollout_layout.valid_rgb_frame_count != row["sanawm_frames"]
         or rollout_layout.fps != row["fps"]
@@ -86,6 +100,7 @@ def generation_identity(
         "preprocessing_id": preprocessing_id,
         "rollout_layout": layout_identity,
         "conditions_sha256": row["conditions_sha256"],
+        "conditioning": conditioning,
         "sampler": sampler,
     }
     return {"generation_id": sha256(canonical_bytes(payload)), **payload}

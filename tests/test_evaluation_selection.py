@@ -27,6 +27,15 @@ def _identity(selection, row, **overrides):
         "codec_id": "LTX2VAE_diffusers_704x1280_official_latent_cache",
         "spatial_resolution": (704, 1280),
         "preprocessing_id": "official_center_crop_v1",
+        "conditioning": {
+            "camera": {
+                "enabled": True,
+                "method": "tiled_prope",
+                "translation_scale": 1.0,
+                "projection_image_size": [128, 128],
+            },
+            "text": {"enabled": False},
+        },
         "rollout_layout": VideoLayout.from_codec(
             fps=16,
             rgb_frame_count=961,
@@ -92,6 +101,19 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(
             selection,
             row,
+            conditioning={
+                "camera": {
+                    "enabled": True,
+                    "method": "tiled_prope",
+                    "translation_scale": 2.0,
+                    "projection_image_size": [128, 128],
+                },
+                "text": {"enabled": False},
+            },
+        ),
+        _identity(
+            selection,
+            row,
             rollout_layout=VideoLayout.from_codec(
                 fps=16,
                 rgb_frame_count=961,
@@ -123,7 +145,7 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         ),
         _identity(selection, selection["rows"][1]),
     ]
-    assert len({item["generation_id"] for item in [baseline, *changes]}) == 10
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 11
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)
