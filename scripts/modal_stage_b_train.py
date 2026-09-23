@@ -22,9 +22,9 @@ VOLUME_ROOT = Path("/stage-a")
 volume = modal.Volume.from_name("tiny-iwm-stage-a", create_if_missing=False)
 MANIFEST_PATH = VOLUME_ROOT / "manifest.json"
 CONFIG_PATH = Path("/opt/tiny-iwm/configurations/runs/stage_b_baseline.yaml")
-INITIAL_CHECKPOINT = VOLUME_ROOT / "checkpoints/stage-b-init.pt"
-INITIAL_ARTIFACT = Path("/opt/tiny-iwm/artifacts/m4/cwx-24-stage-b-initialization.json")
-BEST_CHECKPOINT = VOLUME_ROOT / "checkpoints/stage-b-best.pt"
+INITIAL_CHECKPOINT = VOLUME_ROOT / "checkpoints/stage-b-init-from-model.pt"
+INITIAL_ARTIFACT = Path("/opt/tiny-iwm/artifacts/m4/cwx-26-stage-b-initialization.json")
+BEST_CHECKPOINT = VOLUME_ROOT / "checkpoints/stage-b-best-from-model.pt"
 app = modal.App("tiny-iwm-cwx-26-stage-b")
 
 
@@ -75,7 +75,7 @@ def inspect_inputs() -> str:
         checkpoint_id
         != json.loads(INITIAL_ARTIFACT.read_text())["stage_b_checkpoint_id"]
     ):
-        raise ValueError("Stage B initialization differs from pinned CWX-24 artifact")
+        raise ValueError("Stage B initialization differs from pinned CWX-26 artifact")
     sidecar = INITIAL_CHECKPOINT.with_suffix(".pt.sha256")
     if (
         not sidecar.is_file()
@@ -90,6 +90,8 @@ def inspect_inputs() -> str:
         raise ValueError("initial checkpoint does not belong to this Stage B run")
     if provenance["parent_checkpoint_id"] != config["parent_checkpoint_id"]:
         raise ValueError("initial checkpoint parent differs from pinned Stage A")
+    if provenance["model"]["weights_source"] != config["initial_weights"]:
+        raise ValueError("initial checkpoint uses a different Stage A weight flavor")
     if payload["progress"] != {"global_step": 0, "epoch": 0}:
         raise ValueError("Stage B initialization checkpoint has nonzero progress")
     if payload["optimizer"]["state"] or payload["ema"]["num_updates"] != 0:

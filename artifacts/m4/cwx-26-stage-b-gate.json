@@ -3,7 +3,7 @@
     {
       "chunk": 0,
       "flow_time": 0.9,
-      "max_abs_delta": 0.0087890625
+      "max_abs_delta": 0.0078125
     },
     {
       "chunk": 0,
@@ -13,22 +13,22 @@
     {
       "chunk": 1,
       "flow_time": 0.9,
-      "max_abs_delta": 0.012451171875
+      "max_abs_delta": 0.009765625
     },
     {
       "chunk": 1,
       "flow_time": 0.5,
-      "max_abs_delta": 0.015625
+      "max_abs_delta": 0.009765625
     },
     {
       "chunk": 2,
       "flow_time": 0.9,
-      "max_abs_delta": 0.013671875
+      "max_abs_delta": 0.01171875
     },
     {
       "chunk": 2,
       "flow_time": 0.5,
-      "max_abs_delta": 0.01953125
+      "max_abs_delta": 0.015625
     }
   ],
   "cache_tolerance": {
@@ -36,7 +36,7 @@
     "dtype": "bfloat16",
     "relative": null
   },
-  "config_sha256": "7892311e471a6cf8f717e6d70f73dd708af9fa990ea9c60af65f8b63348d341b",
+  "config_sha256": "91518f6bdb866404e68909b099b00df7a01dc9b43cd00d1a5b53f800128ab330",
   "cost_control": {
     "downloads_inside_gpu_function": false,
     "preflight_device": "cpu",
@@ -44,12 +44,12 @@
   },
   "execution": "train_and_verify",
   "hardware": {
-    "device": "NVIDIA A10",
+    "device": "NVIDIA A10G",
     "gpu_request": "A10G",
     "platform": "Modal",
     "torch": "2.8.0+cu128"
   },
-  "initial_checkpoint_id": "sha256:0d2ca6371b7d3678ebcc62aa3d87109bbc661e275ab62050eaca004a60a16ef7",
+  "initial_checkpoint_id": "sha256:ff217bb1bcc784cca6cdb1c8f2d4df341c0e1f84d92e1f3e826e3c94d69e6b77",
   "issue": "CWX-26",
   "leakage": {
     "attention_backend": "math",
@@ -62,13 +62,13 @@
   "manifest_sha256": "sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf",
   "parent_checkpoint_id": "sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1",
   "quality_note": "This 100-step Stage B baseline is a mechanics gate, not evidence of perceptual convergence.",
-  "run_id": "stage-b-sekai-subset-seed21-v1",
+  "run_id": "stage-b-sekai-subset-seed21-v2",
   "schema_version": 1,
   "seed": 21,
   "selected_checkpoint": {
-    "checkpoint_id": "sha256:3b4b1a71de711b9fb2438e0ca6a0fe5d95a8be4e790d54c7e1bf7c23a0929478",
-    "flow_matching_mse": 1.5294852157433827,
-    "path": "/stage-a/checkpoints/stage-b-best.pt",
+    "checkpoint_id": "sha256:f135810d38418d153eb55264cf39e15728b1711765dd1ff6af1ffc9a8ca84f68",
+    "flow_matching_mse": 1.4855205118656158,
+    "path": "/stage-a/checkpoints/stage-b-best-from-model.pt",
     "resume_verified": true,
     "step": 100,
     "weight_flavor": "model"
@@ -80,72 +80,72 @@
     "ema_precision": "float32",
     "loss_trace": [
       {
-        "loss": 3.107820749282837,
+        "loss": 1.7285957336425781,
         "step": 1,
         "target_chunk": 8
       },
       {
-        "loss": 2.4415462017059326,
+        "loss": 1.8140709400177002,
         "step": 10,
         "target_chunk": 16
       },
       {
-        "loss": 2.000727891921997,
+        "loss": 1.7726240158081055,
         "step": 20,
         "target_chunk": 21
       },
       {
-        "loss": 1.6422817707061768,
+        "loss": 1.5968363285064697,
         "step": 30,
         "target_chunk": 19
       },
       {
-        "loss": 1.7278709411621094,
+        "loss": 1.7337902784347534,
         "step": 40,
         "target_chunk": 1
       },
       {
-        "loss": 1.782217025756836,
+        "loss": 1.7533659934997559,
         "step": 50,
         "target_chunk": 27
       },
       {
-        "loss": 1.8538439273834229,
+        "loss": 1.7188934087753296,
         "step": 60,
         "target_chunk": 22
       },
       {
-        "loss": 1.5499978065490723,
+        "loss": 1.5152649879455566,
         "step": 70,
         "target_chunk": 30
       },
       {
-        "loss": 1.647263526916504,
+        "loss": 1.6861143112182617,
         "step": 80,
         "target_chunk": 1
       },
       {
-        "loss": 1.6915689706802368,
+        "loss": 1.698053002357483,
         "step": 90,
         "target_chunk": 13
       },
       {
-        "loss": 1.827630639076233,
+        "loss": 1.81270170211792,
         "step": 100,
         "target_chunk": 23
       }
     ],
     "parameter_precision": "float32",
     "steps": 100,
-    "wall_seconds": 107.326993367
+    "wall_seconds": 88.175846669
   },
   "validation": [
     {
-      "model_flow_matching_mse": 1.5590830246607463,
+      "model_flow_matching_mse": 1.4956712623437245,
       "step": 50
     },
     {
-      "model_flow_matching_mse": 1.5294852157433827,
+      "model_flow_matching_mse": 1.4855205118656158,
       "step": 100
     }
   ]

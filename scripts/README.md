@@ -65,7 +65,10 @@ counterfactual. The report keeps quality limitations explicit.
 ## Stage B baseline
 
 `modal run scripts/modal_stage_b_train.py::inspect_inputs` checks the pinned
-manifest, prepared files, and Stage B initialization checkpoint on CPU. To run
+manifest, prepared files, and Stage B initialization checkpoint on CPU. The
+CWX-26 initialization uses Stage A's trained model weights; its source and
+checkpoint hash are pinned in `artifacts/m4/cwx-26-stage-b-initialization.json`.
+To run
 the bounded 100-step training and correctness gate, use
 `modal run scripts/modal_stage_b_train.py::main`. The local entrypoint performs the
 CPU check before allocating one A10G. The GPU function reads only the existing

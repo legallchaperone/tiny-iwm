@@ -13,7 +13,11 @@ class ExponentialMovingAverage:
         self.decay = float(decay)
         self.num_updates = 0
         self.shadow = {
-            name: value.detach().to(dtype=torch.float32).clone()
+            name: value.detach().to(
+                dtype=torch.float32
+                if value.dtype in (torch.float16, torch.bfloat16)
+                else value.dtype
+            ).clone()
             for name, value in model.state_dict().items()
             if value.is_floating_point()
         }

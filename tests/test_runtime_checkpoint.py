@@ -65,6 +65,15 @@ def test_bf16_model_ema_accumulates_small_updates_in_fp32():
     assert float(ema.shadow["weight"][0, 0]) > 1.00005
 
 
+def test_float64_model_ema_keeps_double_precision():
+    model = nn.Linear(1, 1, bias=False).to(dtype=torch.float64)
+    with torch.no_grad():
+        model.weight.fill_(1.0 + 1e-12)
+    ema = ExponentialMovingAverage(model, 0.0)
+    assert ema.shadow["weight"].dtype is torch.float64
+    assert float(ema.shadow["weight"][0, 0]) == 1.0 + 1e-12
+
+
 def test_checkpoint_selection_rejects_ambiguous_lifecycle():
     with pytest.raises(ValueError, match="mutually exclusive"):
         CheckpointSelection(init_from="stage-a.pt", resume_from="same-run.pt")

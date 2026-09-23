@@ -1,12 +1,12 @@
 schema_version: 1
-run_id: stage-b-sekai-subset-seed21-v1
+run_id: stage-b-sekai-subset-seed21-v2
 issue: CWX-26
 seed: 21
 stage: B
 parent_run_id: stage-a-sekai-subset-seed21-v1
 parent_checkpoint_id: sha256:4b9c746f320f8900fa8642e3b5dae56a4f80cda910b3a6e64f12fd4cb2ba88f1
-initial_checkpoint: /stage-a/checkpoints/stage-b-init.pt
-initial_weights: stage_a_ema
+initial_checkpoint: /stage-a/checkpoints/stage-b-init-from-model.pt
+initial_weights: stage_a_model
 prepared_manifest_sha256: sha256:dde3184f388802b737ca0c998baa547f8055d71c2f0e3a7b547cc95376f07ecf
 source_revision: 4d965e94b9ea11b9c5ba085251ffa7a0345e006f
 model:
@@ -51,5 +51,5 @@ runtime:
   prepared_volume: tiny-iwm-stage-a
   data_downloads_inside_gpu_function: false
 checkpoint:
-  path: /stage-a/checkpoints/stage-b-best.pt
+  path: /stage-a/checkpoints/stage-b-best-from-model.pt
   format: resumable_runtime_schema_v1
