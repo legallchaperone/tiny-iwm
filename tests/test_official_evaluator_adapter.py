@@ -4,7 +4,12 @@ import pytest
 
 from core.video_layout import CodecTemporalSpec, VideoLayout
 from evaluation.identity import claim_output_directory, generation_identity
-from evaluation.official import OFFICIAL_COMMIT, metric_commands, stage_official_inputs
+from evaluation.official import (
+    OFFICIAL_COMMIT,
+    metric_commands,
+    score_official,
+    stage_official_inputs,
+)
 from evaluation.selection import canonical_bytes, sha256
 
 
@@ -91,6 +96,7 @@ def _fixture(tmp_path):
                 "steps": 25,
                 "cfg_scale": 1,
                 "history_policy": "clean_cached",
+                "initial_history_policy": "source_image_only",
             },
         )
         directory = claim_output_directory(outputs, identity)
@@ -138,3 +144,22 @@ def test_metric_commands_use_official_entry_points_and_pinned_protocol(tmp_path)
     assert metric[metric.index("--skip_first_frame") + 1] == "no"
     assert "--revisit_lpips" in metric
     assert "--vbench_dims" in metric
+    assert metric[metric.index("--metrics") + 1 : metric.index("--vbench_dims")] == [
+        "vbench",
+        "revisit",
+        "camera",
+        "temporal",
+    ]
+
+
+def test_scoring_consumes_raw_pose_results_in_official_summary(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    commands = []
+    monkeypatch.setattr(
+        "evaluation.official.subprocess.run",
+        lambda command, **_: commands.append(command),
+    )
+    score_official(*paths, tmp_path / "Sana", seed=42)
+    assert commands[0][1].endswith("eval_benchmark_poses.py")
+    assert commands[1][1].endswith("eval_unified.py")

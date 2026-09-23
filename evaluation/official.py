@@ -197,6 +197,7 @@ def metric_commands(
         "--metrics",
         "vbench",
         "revisit",
+        "camera",
         "temporal",
         "--vbench_dims",
         *VBenCH_DIMS,
@@ -247,8 +248,8 @@ def score_official(
         metric, camera = metric_commands(
             official_repo, benchmark_root, method_dir, split
         )
-        subprocess.run(metric, cwd=official_repo, check=True)
         subprocess.run(camera, cwd=official_repo, check=True)
+        subprocess.run(metric, cwd=official_repo, check=True)
 
 
 def main() -> None:
