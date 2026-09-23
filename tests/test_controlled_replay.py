@@ -8,7 +8,7 @@ from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
 from algorithms.world_model.models.prope import TokenCameraProjection
 from core.video_layout import CodecTemporalSpec, VideoLayout
 from probing.capture import FeatureRecorder, TokenSelection
-from probing.replay import controlled_replay
+from probing.replay import _tensor_sha256, controlled_replay
 
 
 def _inputs():
@@ -192,3 +192,8 @@ def test_controlled_replay_metrics_promote_before_subtracting(monkeypatch):
     metrics = controlled_replay(model, layout, **arguments).report["metrics"]
     assert all(math.isfinite(value) for value in metrics.values())
     assert metrics["prediction_max_abs_delta"] == 80000.0
+
+
+def test_tensor_hash_ignores_unrelated_backing_storage():
+    values = torch.tensor([[1.0], [2.0], [3.0]])
+    assert _tensor_sha256(values[1:2]) == _tensor_sha256(values[1:2].clone())

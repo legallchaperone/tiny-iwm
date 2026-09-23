@@ -19,7 +19,7 @@ from probing.capture import CaptureContext, FeatureRecorder
 
 def _tensor_sha256(value: torch.Tensor) -> str:
     stream = BytesIO()
-    torch.save(value.detach().contiguous().cpu(), stream)
+    torch.save(value.detach().to("cpu").contiguous().clone(), stream)
     return "sha256:" + hashlib.sha256(stream.getvalue()).hexdigest()
 
 
