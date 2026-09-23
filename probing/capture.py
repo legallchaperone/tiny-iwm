@@ -5,11 +5,13 @@ from __future__ import annotations
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import tempfile
+from threading import Lock
 from typing import Mapping
 
 import torch
@@ -19,6 +21,7 @@ from core.types import ProbeEvent
 
 
 _RECOMPUTING = ContextVar("probe_activation_recomputation", default=False)
+_PROCESS_LOCK = Lock()
 
 
 @contextmanager
@@ -93,6 +96,21 @@ class FeatureRecorder:
     ) -> None:
         if _RECOMPUTING.get() or not self.points or not self.tokens:
             return
+        self.root.mkdir(parents=True, exist_ok=True)
+        with _PROCESS_LOCK, (self.root / ".capture.lock").open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                self.record_count = len(list(self.root.glob("*.json")))
+                self.raw_bytes = sum(
+                    path.stat().st_size for path in self.root.glob("*.pt")
+                )
+                self._record_locked(context, observations)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _record_locked(
+        self, context: CaptureContext, observations: dict[str, torch.Tensor]
+    ) -> None:
         count = len(self.points) * len(self.tokens)
         if self.record_count + count > self.max_records:
             raise ValueError("feature record budget exceeded")

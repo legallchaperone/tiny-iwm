@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 import torch
@@ -152,3 +153,26 @@ def test_existing_files_count_toward_new_recorder_budget(tmp_path):
     (tmp_path / "existing.json").write_text("{}")
     with pytest.raises(ValueError, match="existing feature storage"):
         FeatureRecorder(tmp_path, max_records=0)
+
+
+def test_separate_recorders_share_one_storage_budget(tmp_path):
+    model = _model()
+    settings = {
+        "points": ("final_norm",),
+        "tokens": (TokenSelection(0, "target", {"time_seconds": 0.25}),),
+        "max_records": 1,
+    }
+    first = FeatureRecorder(tmp_path, **settings)
+    second = FeatureRecorder(tmp_path, **settings)
+    latents = torch.randn(1, 4, 2, 4, 4)
+    time = torch.tensor([0.5])
+    capture_forward(model, latents, time, context=_context(), recorder=first)
+    with pytest.raises(ValueError, match="record budget"):
+        capture_forward(
+            model,
+            latents,
+            time,
+            context=replace(_context(), sample_id="second-scene"),
+            recorder=second,
+        )
+    assert len(list(tmp_path.glob("*.json"))) == 1

@@ -18,6 +18,8 @@ event per selected point and token; raw `.pt` tensors are opt-in.
 raw retention. `off.yaml` disables capture. A full-minute all-layer/all-step
 dump is never the default. The recorder raises when the record or serialized
 raw-byte budget would be exceeded, including files from a prior process.
+Writers sharing a capture directory reserve their budget under a filesystem
+lock before publishing records.
 `checkpoint_contexts` can be passed as the
 `context_fn` to non-reentrant `torch.utils.checkpoint.checkpoint`; it suppresses
 records during activation recomputation while leaving the recomputed forward
