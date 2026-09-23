@@ -37,6 +37,7 @@ TEMPORAL_DIMS = (
 )
 RUN_FIELDS = (
     "selection_id",
+    "seed",
     "checkpoint_id",
     "weight_flavor",
     "model_config",
@@ -186,6 +187,8 @@ def stage_official_inputs(
                 continue
             if identity["selection_id"] != selection["selection_id"]:
                 continue
+            if identity["seed"] != seed:
+                continue
             _verify_identity(identity, selection, row)
             matched.append((candidate.parent, identity, run, candidate_run_id))
         if len(matched) != 1:
@@ -210,6 +213,8 @@ def stage_official_inputs(
             or metadata.get("video_sha256") != video_sha256
         ):
             raise ValueError("generated video differs from its identity metadata")
+        if identity["spatial_resolution"] != [128, 128]:
+            raise ValueError("generation identity has wrong output resolution")
         _validate_video(source, row)
         target = method_dir / row["split"] / f"{row['scene_id']}_generated.mp4"
         staged.append(
@@ -357,6 +362,9 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         row["scene_id"]: min(5, row["evaluation_pair_count"]) for row in rows
     }
     scoring_frames = {row["scene_id"]: row["official_scoring_frames"] for row in rows}
+    camera_frames = {
+        row["scene_id"]: (row["sanawm_frames"] - 1) // 4 + 1 for row in rows
+    }
     root = method_dir / "eval" / split
     poses = json.loads((method_dir / split / "eval_poses.json").read_text())
     revisit = json.loads((root / "revisit_consistency.json").read_text())
@@ -377,8 +385,8 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         or set(camera) != expected
         or set(per_scene) != expected
         or any(
-            not _valid_camera_result(poses[scene])
-            or not _valid_camera_result(camera[scene])
+            not _valid_camera_result(poses[scene], camera_frames[scene])
+            or not _valid_camera_result(camera[scene], camera_frames[scene])
             or not _valid_revisit_result(per_scene[scene], count, scoring_frames[scene])
             for scene, count in expected_pairs.items()
         )
@@ -416,13 +424,13 @@ def _finite_tree(value: object) -> bool:
     return True
 
 
-def _valid_camera_result(value: object) -> bool:
+def _valid_camera_result(value: object, expected_frames: int) -> bool:
     return (
         isinstance(value, dict)
         and value.get("RotErr_unit") == "deg"
         and value.get("skip_first_frame") is False
         and type(value.get("n_frames")) is int
-        and value["n_frames"] > 0
+        and value["n_frames"] == expected_frames
         and all(
             _finite_number(value.get(field))
             for field in ("RotErr", "TransErr_rel", "CamMC_rel")

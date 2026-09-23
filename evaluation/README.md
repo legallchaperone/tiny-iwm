@@ -61,9 +61,8 @@ requires a single compatible run identity across scenes, then links each
 an immutable `staging.json` recording the source commit, license, zero local
 modifications, selected scene identities, and source paths. Staging uses
 `ffprobe` and `ffmpeg` on CPU to check complete decoding, exact frame count
-and FPS, plus the formal 128 × 128 output size. `spatial_resolution` in the
-generation identity records the source image resolution, while the encoded
-rollout is 128 × 128. It verifies the recorded video SHA-256 again before each scorer and
+and FPS, plus the formal 128 × 128 output size recorded in the generation
+identity. It verifies the recorded video SHA-256 again before each scorer and
 rejects any extra generated video in a scored split. If multiple
 generation identities exist for a scene, staging reports the
 available shared run IDs. Pass `--run-id sha256:...` and use a separate method

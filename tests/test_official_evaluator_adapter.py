@@ -105,7 +105,7 @@ def _fixture(tmp_path):
                 "backend_fingerprint": backend,
                 "cuda_math_policy": "strict_no_tf32",
             },
-            spatial_resolution=(704, 1280),
+            spatial_resolution=(128, 128),
             preprocessing_id="crop-v1",
             rollout_layout=layout,
             conditioning={"camera": {"enabled": False}, "text": {"enabled": False}},
@@ -330,6 +330,16 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
         )
     )
     _verify_scored_split(tmp_path, "simple_60s", rows)
+    pose["n_frames"] = 1
+    (split / "eval_poses.json").write_text(
+        json.dumps({scene: pose for scene in scenes})
+    )
+    with pytest.raises(ValueError, match="incomplete coverage"):
+        _verify_scored_split(tmp_path, "simple_60s", rows)
+    pose["n_frames"] = 241
+    (split / "eval_poses.json").write_text(
+        json.dumps({scene: pose for scene in scenes})
+    )
     revisit["per_scene"][scenes[1]]["n_pairs"] = 0
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     with pytest.raises(ValueError, match="incomplete coverage"):
@@ -400,6 +410,26 @@ def test_staging_selects_one_run_from_multiple_generation_identities(
     report = stage_official_inputs(*paths, seed=42, run_id=run_id)
     assert report["run_id"] == run_id
     assert len(report["staged"]) == 2
+
+
+def test_staging_ignores_other_generation_seed(tmp_path, monkeypatch):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    paths = _fixture(tmp_path)
+    original = json.loads(
+        next(paths[2].glob("simple_60s/game_style_001/*/identity.json")).read_text()
+    )
+    other_seed = dict(original, seed=43)
+    other_seed["generation_id"] = sha256(
+        canonical_bytes(
+            {key: value for key, value in other_seed.items() if key != "generation_id"}
+        )
+    )
+    claim_output_directory(paths[2], other_seed)
+    report = stage_official_inputs(*paths, seed=42)
+    assert report["generation_seed"] == 42
+    assert report["run_id"] == sha256(
+        canonical_bytes({field: original[field] for field in RUN_FIELDS})
+    )
 
 
 def test_staging_rejects_video_changed_after_generation(tmp_path, monkeypatch):
