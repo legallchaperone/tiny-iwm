@@ -141,12 +141,25 @@ def _key(record: dict, fields: tuple[str, ...]) -> tuple:
     return tuple(_canonical(record[field]) for field in fields)
 
 
+def _sort_key(record: dict, fields: tuple[str, ...]) -> tuple:
+    def part(value):
+        if value is None:
+            return (0, "")
+        if isinstance(value, (int, float)):
+            return (1, value)
+        if isinstance(value, str):
+            return (2, value)
+        return (3, _canonical(value))
+
+    return tuple(part(record[field]) for field in fields)
+
+
 def pair_captures(
     left: list[tuple[dict, torch.Tensor]],
     right: list[tuple[dict, torch.Tensor]],
     *,
     fixed_fields: tuple[str, ...] = PAIR_FIELDS,
-) -> tuple[torch.Tensor, torch.Tensor, list[dict]]:
+) -> tuple[list[torch.Tensor], list[torch.Tensor], list[dict]]:
     """Join on every fixed variable; provenance/purpose may differ deliberately."""
     left_by_key = {
         _key(record, fixed_fields): (record, value) for record, value in left
@@ -160,8 +173,8 @@ def pair_captures(
         raise ValueError("capture rows differ in fixed sample/time/token coordinates")
     keys = sorted(left_by_key)
     return (
-        torch.stack([left_by_key[key][1] for key in keys]),
-        torch.stack([right_by_key[key][1] for key in keys]),
+        [left_by_key[key][1] for key in keys],
+        [right_by_key[key][1] for key in keys],
         [left_by_key[key][0] for key in keys],
     )
 
@@ -182,7 +195,7 @@ def summarize_capture(root: Path) -> dict:
                 "raw_files": [record["raw_file"] for record, _ in members],
             }
         )
-    summaries.sort(key=lambda item: tuple(item[field] for field in GROUP_FIELDS))
+    summaries.sort(key=lambda item: _sort_key(item, GROUP_FIELDS))
     identity_parts = [
         {
             "record": record,
@@ -232,12 +245,13 @@ def history_alignment(root: Path) -> dict:
                     field: matched[indices[0]][field]
                     for field in ALIGNMENT_GROUP_FIELDS
                 },
-                **compare_features(left[indices], right[indices]),
+                **compare_features(
+                    torch.stack([left[index] for index in indices]),
+                    torch.stack([right[index] for index in indices]),
+                ),
             }
         )
-    by_group.sort(
-        key=lambda item: tuple(item[field] for field in ALIGNMENT_GROUP_FIELDS)
-    )
+    by_group.sort(key=lambda item: _sort_key(item, ALIGNMENT_GROUP_FIELDS))
     return {
         "comparison": "controlled_gt_vs_generated_history",
         "fixed_fields": list(CONTROLLED_FIELDS),
@@ -262,10 +276,13 @@ def compare_capture_roots(left_root: Path, right_root: Path) -> dict:
         comparisons.append(
             {
                 **{field: records[indices[0]][field] for field in GROUP_FIELDS},
-                **compare_features(left[indices], right[indices]),
+                **compare_features(
+                    torch.stack([left[index] for index in indices]),
+                    torch.stack([right[index] for index in indices]),
+                ),
             }
         )
-    comparisons.sort(key=lambda item: tuple(item[field] for field in GROUP_FIELDS))
+    comparisons.sort(key=lambda item: _sort_key(item, GROUP_FIELDS))
     return {
         "fixed_fields": list(VARIANT_FIELDS),
         "left_capture_identity": summarize_capture(left_root)["capture_identity"],

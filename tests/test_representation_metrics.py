@@ -97,6 +97,34 @@ def test_history_alignment_keeps_model_provenance_separate(tmp_path):
     assert all(item["matched_observations"] == 2 for item in groups)
 
 
+def test_mixed_feature_widths_are_grouped_before_stacking(tmp_path):
+    left, right = tmp_path / "left", tmp_path / "right"
+    left.mkdir()
+    right.mkdir()
+    for root in (left, right):
+        for scene in ("a", "b", "c", "d"):
+            value = [1.0, 2.0] if scene in ("a", "b") else [1.0, 2.0, 3.0]
+            for purpose in ("controlled_gt_history", "controlled_generated_history"):
+                _write(root, purpose, 8, scene, value)
+                if scene in ("c", "d"):
+                    path = root / f"{purpose}-8-{scene}.json"
+                    record = json.loads(path.read_text())
+                    record["observation_point"] = "velocity_tokens"
+                    path.write_text(json.dumps(record))
+    assert len(history_alignment(left)["per_group"]) == 2
+    assert len(compare_capture_roots(left, right)["per_group"]) == 4
+
+
+def test_nullable_training_seed_groups_sort_deterministically(tmp_path):
+    for scene in ("a", "b"):
+        _write(tmp_path, "denoise", 8, scene, [1.0, 2.0])
+    path = tmp_path / "denoise-8-a.json"
+    record = json.loads(path.read_text())
+    record["training_seed"] = None
+    path.write_text(json.dumps(record))
+    assert len(summarize_capture(tmp_path)["groups"]) == 2
+
+
 def test_mismatched_capture_coordinates_are_rejected():
     record = {
         "sample_id": "a",
