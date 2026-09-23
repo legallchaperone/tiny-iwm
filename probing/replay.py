@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 from io import BytesIO
+import math
 
 import torch
 
@@ -157,12 +158,25 @@ def controlled_replay(
             )
         )
     gt_prediction, generated_prediction = predictions
-    if not torch.isfinite(gt_prediction).all() or not torch.isfinite(
-        generated_prediction
-    ).all():
+    if (
+        not torch.isfinite(gt_prediction).all()
+        or not torch.isfinite(generated_prediction).all()
+    ):
         raise ValueError("replay predictions must be finite")
-    difference = (generated_prediction - gt_prediction).float()
-    target = target_velocity(target_clean, target_noise).float()
+    gt64 = gt_prediction.to(torch.float64)
+    generated64 = generated_prediction.to(torch.float64)
+    difference = generated64 - gt64
+    target = target_velocity(
+        target_clean.to(torch.float64), target_noise.to(torch.float64)
+    )
+    metrics = {
+        "gt_target_mse": float((gt64 - target).square().mean()),
+        "generated_target_mse": float((generated64 - target).square().mean()),
+        "prediction_mean_abs_delta": float(difference.abs().mean()),
+        "prediction_max_abs_delta": float(difference.abs().max()),
+    }
+    if not all(math.isfinite(value) for value in metrics.values()):
+        raise ValueError("replay metrics must be finite")
     report = {
         "schema_version": 1,
         "comparison": "controlled_gt_vs_generated_history",
@@ -198,13 +212,6 @@ def controlled_replay(
             "gt_history_sha256": _tensor_sha256(gt_history),
             "generated_history_sha256": _tensor_sha256(generated_history),
         },
-        "metrics": {
-            "gt_target_mse": float((gt_prediction.float() - target).square().mean()),
-            "generated_target_mse": float(
-                (generated_prediction.float() - target).square().mean()
-            ),
-            "prediction_mean_abs_delta": float(difference.abs().mean()),
-            "prediction_max_abs_delta": float(difference.abs().max()),
-        },
+        "metrics": metrics,
     }
     return ControlledReplayResult(gt_prediction, generated_prediction, report)

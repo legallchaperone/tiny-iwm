@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 import torch
@@ -134,3 +135,20 @@ def test_controlled_replay_rejects_nonfinite_history():
     arguments["generated_history"][:, :, 1] = float("nan")
     with pytest.raises(ValueError, match="must be finite"):
         controlled_replay(model, layout, **arguments)
+
+
+def test_controlled_replay_metrics_promote_before_subtracting(monkeypatch):
+    model, layout, arguments = _inputs()
+    arguments["target_clean"] = torch.full_like(
+        arguments["target_clean"], 65504, dtype=torch.float16
+    )
+    arguments["target_noise"] = -arguments["target_clean"]
+    calls = iter((40000.0, -40000.0))
+
+    def predict(_, identity, chunk_index, noisy_chunk, flow_time, **kwargs):
+        return torch.full_like(noisy_chunk, next(calls))
+
+    monkeypatch.setattr("inference.history.HistorySession.predict", predict)
+    metrics = controlled_replay(model, layout, **arguments).report["metrics"]
+    assert all(math.isfinite(value) for value in metrics.values())
+    assert metrics["prediction_max_abs_delta"] == 80000.0
