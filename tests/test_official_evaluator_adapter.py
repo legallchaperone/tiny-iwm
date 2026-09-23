@@ -241,15 +241,48 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     split.mkdir()
     scenes = ("game_style_001", "indoor_001")
     rows = [
-        {"scene_id": scene, "evaluation_pair_count": 1, "sanawm_frames": 961, "fps": 16}
+        {
+            "scene_id": scene,
+            "evaluation_pair_count": 1,
+            "sanawm_frames": 961,
+            "official_scoring_frames": 960,
+            "fps": 16,
+        }
         for scene in scenes
     ]
-    (split / "eval_poses.json").write_text(json.dumps({scene: {} for scene in scenes}))
+    pose = {
+        "RotErr": 1.0,
+        "RotErr_unit": "deg",
+        "TransErr_rel": 0.2,
+        "CamMC_rel": 0.3,
+        "n_frames": 241,
+        "skip_first_frame": False,
+    }
+    (split / "eval_poses.json").write_text(
+        json.dumps({scene: pose for scene in scenes})
+    )
     (root / "camera_accuracy.json").write_text(
-        json.dumps({scene: {} for scene in scenes})
+        json.dumps({scene: pose for scene in scenes})
     )
     revisit = {
-        "per_scene": {scene: {"n_pairs": 1} for scene in scenes},
+        "per_scene": {
+            scene: {
+                "n_pairs": 1,
+                "mean_psnr": 20.0,
+                "mean_ssim": 0.8,
+                "mean_lpips": 0.1,
+                "pairs": [
+                    {
+                        "frame_a": 1,
+                        "frame_b": 2,
+                        "psnr": 20.0,
+                        "ssim": 0.8,
+                        "lpips": 0.1,
+                    }
+                ],
+            }
+            for scene in scenes
+        },
         "summary": {"n_total_pairs": 2},
     }
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
@@ -302,6 +335,11 @@ def test_scored_split_requires_all_scenes_and_revisit_pairs(tmp_path):
     with pytest.raises(ValueError, match="incomplete coverage"):
         _verify_scored_split(tmp_path, "simple_60s", rows)
     revisit["per_scene"][scenes[1]]["n_pairs"] = 1
+    revisit["per_scene"][scenes[1]]["mean_psnr"] = float("nan")
+    (root / "revisit_consistency.json").write_text(json.dumps(revisit))
+    with pytest.raises(ValueError, match="incomplete coverage"):
+        _verify_scored_split(tmp_path, "simple_60s", rows)
+    revisit["per_scene"][scenes[1]]["mean_psnr"] = 20.0
     (root / "revisit_consistency.json").write_text(json.dumps(revisit))
     path = root / f"eval_{VBenCH_DIMS[0]}_eval_results.json"
     path.write_text(

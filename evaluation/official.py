@@ -356,6 +356,7 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
     expected_pairs = {
         row["scene_id"]: min(5, row["evaluation_pair_count"]) for row in rows
     }
+    scoring_frames = {row["scene_id"]: row["official_scoring_frames"] for row in rows}
     root = method_dir / "eval" / split
     poses = json.loads((method_dir / split / "eval_poses.json").read_text())
     revisit = json.loads((root / "revisit_consistency.json").read_text())
@@ -376,7 +377,9 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         or set(camera) != expected
         or set(per_scene) != expected
         or any(
-            per_scene[scene]["n_pairs"] != count
+            not _valid_camera_result(poses[scene])
+            or not _valid_camera_result(camera[scene])
+            or not _valid_revisit_result(per_scene[scene], count, scoring_frames[scene])
             for scene, count in expected_pairs.items()
         )
         or revisit["summary"]["n_total_pairs"] != sum(expected_pairs.values())
@@ -387,6 +390,7 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
         or set(vbench["raw_scores"]) != set(VBenCH_DIMS)
         or set(temporal["windows"]) != expected_windows
         or "temporal_degradation" not in summary
+        or not _finite_tree((poses, revisit, camera, vbench, temporal, summary))
     ):
         raise ValueError(f"official scorer returned incomplete coverage for {split}")
     for dimension in VBenCH_DIMS:
@@ -396,6 +400,62 @@ def _verify_scored_split(method_dir: Path, split: str, rows: list[dict]) -> None
             _verify_vbench_scene_results(
                 root / "temporal/temporal_results" / window, dimension, expected
             )
+
+
+def _finite_number(value: object) -> bool:
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def _finite_tree(value: object) -> bool:
+    if type(value) in (int, float):
+        return math.isfinite(value)
+    if isinstance(value, dict):
+        return all(_finite_tree(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(_finite_tree(item) for item in value)
+    return True
+
+
+def _valid_camera_result(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("RotErr_unit") == "deg"
+        and value.get("skip_first_frame") is False
+        and type(value.get("n_frames")) is int
+        and value["n_frames"] > 0
+        and all(
+            _finite_number(value.get(field))
+            for field in ("RotErr", "TransErr_rel", "CamMC_rel")
+        )
+    )
+
+
+def _valid_revisit_result(value: object, count: int, frames: int) -> bool:
+    if not isinstance(value, dict):
+        return False
+    pairs = value.get("pairs")
+    return (
+        type(value.get("n_pairs")) is int
+        and value["n_pairs"] == count
+        and isinstance(pairs, list)
+        and len(pairs) == count
+        and all(
+            isinstance(pair, dict)
+            and all(
+                type(pair.get(field)) is int and 0 <= pair[field] < frames
+                for field in ("frame_a", "frame_b")
+            )
+            and pair["frame_a"] != pair["frame_b"]
+            and all(
+                _finite_number(pair.get(field)) for field in ("psnr", "ssim", "lpips")
+            )
+            for pair in pairs
+        )
+        and all(
+            _finite_number(value.get(field))
+            for field in ("mean_psnr", "mean_ssim", "mean_lpips")
+        )
+    )
 
 
 def _verify_vbench_scene_results(
