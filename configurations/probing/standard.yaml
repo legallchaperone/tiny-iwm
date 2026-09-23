@@ -1,5 +1,8 @@
 enabled: true
-layers: null         # unresolved layer selection
-capture_points: null # unresolved capture locations
-metrics: null        # unresolved probe metrics
-sample_manifest: null
+capture_points: [blocks.11.block_output]
+token_indices: [0]
+max_records: 256
+raw_points: []
+max_raw_bytes: 0
+metrics: null # CWX-32 selects analysis metrics
+sample_manifest: null # the run supplies its frozen sample selection
