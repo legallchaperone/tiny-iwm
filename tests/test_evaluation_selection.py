@@ -239,6 +239,8 @@ def test_generation_identity_separates_all_variable_inputs(tmp_path):
         _identity(selection, selection["rows"][1]),
     ]
     assert len({item["generation_id"] for item in [baseline, *changes]}) == 17
+    tuple_config = {**baseline["model_config"], "patch_size": (1, 2, 2)}
+    assert _identity(selection, row, model_config=tuple_config) == baseline
     directory = claim_output_directory(tmp_path, baseline)
     assert claim_output_directory(tmp_path, baseline) == directory
     verify_output_identity(directory, baseline)

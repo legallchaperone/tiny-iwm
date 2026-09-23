@@ -200,6 +200,7 @@ def generation_identity(
         "numeric_execution": numeric_execution,
         "sampler": sampler,
     }
+    payload = json.loads(canonical_bytes(payload))
     return {"generation_id": sha256(canonical_bytes(payload)), **payload}
 
 
