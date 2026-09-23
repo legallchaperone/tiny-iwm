@@ -1,5 +1,7 @@
 protocol: sana_wm_official
 selection: subset
-manifest: null # unresolved fixed evaluation subset
+manifest: data/manifests/sana_wm_eval_subset_v1.json
+dataset_revision: 0e5279250e7a531b83ce4e9ee2870fab7003be0b
+selection_id: sha256:bc2f11eb39fc90fe8300a33c11c01e3fbe5f00503e62286077dce3ecf03722e1
 metrics: null  # unresolved official metric list/version
-seeds: null
+seeds: [42]

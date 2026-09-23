@@ -1,0 +1,107 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from evaluation.identity import (
+    claim_output_directory,
+    generation_identity,
+    verify_output_identity,
+)
+from evaluation.selection import canonical_bytes, sha256, write_immutable
+
+
+MANIFEST = Path("data/manifests/sana_wm_eval_subset_v1.json")
+
+
+def _selection():
+    return json.loads(MANIFEST.read_text())
+
+
+def _identity(selection, row, **overrides):
+    inputs = {
+        "checkpoint_id": "sha256:" + "a" * 64,
+        "weight_flavor": "ema",
+        "codec_id": "LTX2VAE_diffusers_704x1280_official_latent_cache",
+        "sampler": {
+            "solver": "euler",
+            "steps": 25,
+            "cfg_scale": 1.0,
+            "history_policy": "clean_cached",
+        },
+    }
+    inputs.update(overrides)
+    return generation_identity(selection, row, **inputs)
+
+
+def test_frozen_subset_preserves_official_minute_protocol():
+    selection = _selection()
+    payload = {key: value for key, value in selection.items() if key != "selection_id"}
+    assert selection["selection_id"] == sha256(canonical_bytes(payload))
+    assert len(selection["rows"]) == 8
+    assert {row["split"] for row in selection["rows"]} == {"simple_60s", "hard_60s"}
+    assert {row["category"] for row in selection["rows"]} == {
+        "game_style",
+        "indoor",
+        "outdoor_city",
+        "outdoor_nature",
+    }
+    assert len({row["scene_id"] for row in selection["rows"]}) == 4
+    assert all(
+        (
+            row["sanawm_frames"],
+            row["fps"],
+            row["official_scoring_frames"],
+            row["official_trim_to_frames"],
+        )
+        == (961, 16, 960, 960)
+        and row["evaluation_pair_count"] > 0
+        and row["evaluation_pair_max_frame"] < 960
+        for row in selection["rows"]
+    )
+
+
+def test_generation_identity_separates_all_variable_inputs(tmp_path):
+    selection = _selection()
+    row = selection["rows"][0]
+    baseline = _identity(selection, row)
+    changes = [
+        _identity(selection, row, checkpoint_id="sha256:" + "b" * 64),
+        _identity(selection, row, weight_flavor="model"),
+        _identity(selection, row, codec_id="other-codec"),
+        _identity(
+            selection,
+            row,
+            sampler={
+                "solver": "euler",
+                "steps": 26,
+                "cfg_scale": 1.0,
+                "history_policy": "clean_cached",
+            },
+        ),
+        _identity(selection, selection["rows"][1]),
+    ]
+    assert len({item["generation_id"] for item in [baseline, *changes]}) == 6
+    directory = claim_output_directory(tmp_path, baseline)
+    assert claim_output_directory(tmp_path, baseline) == directory
+    verify_output_identity(directory, baseline)
+    with pytest.raises(ValueError, match="different generation identity"):
+        verify_output_identity(directory, changes[0])
+
+
+def test_tampering_and_replacement_are_rejected(tmp_path):
+    selection = _selection()
+    row = selection["rows"][0]
+    identity = _identity(selection, row)
+    changed_selection = dict(selection)
+    changed_selection["dataset_revision"] = "0" * 40
+    with pytest.raises(ValueError, match="selection content differs"):
+        _identity(changed_selection, row)
+    changed_identity = dict(identity, checkpoint_id="sha256:" + "b" * 64)
+    with pytest.raises(ValueError, match="does not match"):
+        claim_output_directory(tmp_path, changed_identity)
+    path = tmp_path / "frozen.json"
+    write_immutable(path, selection)
+    write_immutable(path, selection)
+    with pytest.raises(FileExistsError, match="immutable selection"):
+        write_immutable(path, changed_selection)
