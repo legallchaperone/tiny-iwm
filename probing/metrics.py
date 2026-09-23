@@ -142,7 +142,7 @@ def compare_features(left: torch.Tensor, right: torch.Tensor) -> dict:
                 .sum(dim=1)
                 .mean()
             )
-        l2_drift = float(torch.linalg.vector_norm(left - right, dim=1).mean())
+        l2_drift = float(torch.linalg.vector_norm(left64 - right64, dim=1).mean())
     return {
         "matched_observations": left.shape[0],
         "centered_linear_cka": cka,

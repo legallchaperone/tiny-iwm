@@ -56,6 +56,8 @@ def test_centered_spectrum_norms_and_cka_have_declared_axes():
     zero = torch.zeros_like(tiny)
     assert compare_features(zero, zero)["mean_row_cosine"] is None
     assert compare_features(zero, zero)["cosine_valid_rows"] == 0
+    large = torch.tensor([[65504.0, 0.0], [0.0, 65504.0]], dtype=torch.float16)
+    assert compare_features(large, -large)["mean_row_l2_drift"] == 131008.0
     assert describe_features(torch.tensor([[1.0], [3.0]]))["norm"]["median"] == 2.0
 
 
