@@ -121,7 +121,16 @@ def _fixture(tmp_path):
             },
         )
         directory = claim_output_directory(outputs, identity)
-        (directory / "video.mp4").write_bytes(b"fake video for directory adapter test")
+        video = directory / "video.mp4"
+        video.write_bytes(b"fake video for directory adapter test")
+        (directory / "metadata.json").write_text(
+            json.dumps(
+                {
+                    "generation_id": identity["generation_id"],
+                    "video_sha256": sha256(video.read_bytes()),
+                }
+            )
+        )
     return selection_path, benchmark, outputs, tmp_path / "method"
 
 
@@ -134,6 +143,10 @@ def test_staging_preserves_separate_identity_and_official_output_names(
     assert report["official_source"]["commit"] == OFFICIAL_COMMIT
     assert report["official_source"]["local_modifications"] == []
     assert len(report["staged"]) == 2
+    assert all(
+        item["video_sha256"] == sha256(b"fake video for directory adapter test")
+        for item in report["staged"]
+    )
     for item in report["staged"]:
         link = paths[3] / item["split"] / f"{item['scene_id']}_generated.mp4"
         assert link.is_symlink()
@@ -218,12 +231,43 @@ def test_staging_selects_one_run_from_multiple_generation_identities(
     )
     alternate_dir = claim_output_directory(paths[2], alternate)
     (alternate_dir / "video.mp4").write_bytes(b"alternate run")
+    foreign = dict(original, selection_id="sha256:" + "f" * 64)
+    foreign["generation_id"] = sha256(
+        canonical_bytes(
+            {key: value for key, value in foreign.items() if key != "generation_id"}
+        )
+    )
+    claim_output_directory(paths[2], foreign)
     with pytest.raises(ValueError, match="available run IDs"):
         stage_official_inputs(*paths, seed=42)
     run_id = sha256(canonical_bytes({field: original[field] for field in RUN_FIELDS}))
     report = stage_official_inputs(*paths, seed=42, run_id=run_id)
     assert report["run_id"] == run_id
     assert len(report["staged"]) == 2
+
+
+def test_staging_rejects_video_changed_after_generation(tmp_path, monkeypatch):
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    paths = _fixture(tmp_path)
+    video = next(paths[2].glob("simple_60s/game_style_001/*/video.mp4"))
+    video.write_bytes(b"different complete video")
+    with pytest.raises(ValueError, match="differs from its identity metadata"):
+        stage_official_inputs(*paths, seed=42)
+
+
+def test_scoring_rechecks_video_between_official_metrics(tmp_path, monkeypatch):
+    paths = _fixture(tmp_path)
+    (tmp_path / "Sana").mkdir()
+    monkeypatch.setattr("evaluation.official._validate_video", lambda *_: None)
+    monkeypatch.setattr("evaluation.official._verify_official_checkout", lambda _: None)
+    video = next(paths[2].glob("simple_60s/game_style_001/*/video.mp4"))
+
+    def run(command, **kwargs):
+        video.write_bytes(b"changed during scoring")
+
+    monkeypatch.setattr("evaluation.official.subprocess.run", run)
+    with pytest.raises(ValueError, match="changed before official scoring"):
+        score_official(*paths, tmp_path / "Sana", seed=42)
 
 
 def test_video_probe_rejects_wrong_length_before_scoring(tmp_path, monkeypatch):

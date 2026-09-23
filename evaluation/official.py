@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from fractions import Fraction
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -122,6 +123,14 @@ def _validate_video(path: Path, row: dict) -> None:
     )
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
+
+
 def stage_official_inputs(
     selection_path: Path,
     benchmark_root: Path,
@@ -153,12 +162,20 @@ def stage_official_inputs(
         for candidate in candidates:
             identity = json.loads(candidate.read_text())
             verify_output_identity(candidate.parent, identity)
-            _verify_identity(identity, selection, row)
+            content = {
+                key: value for key, value in identity.items() if key != "generation_id"
+            }
+            if identity["generation_id"] != sha256(canonical_bytes(content)):
+                raise ValueError("candidate generation identity content has changed")
             run = {field: identity[field] for field in RUN_FIELDS}
             candidate_run_id = sha256(canonical_bytes(run))
             available.add(candidate_run_id)
-            if run_id is None or candidate_run_id == run_id:
-                matched.append((candidate.parent, identity, run, candidate_run_id))
+            if run_id is not None and candidate_run_id != run_id:
+                continue
+            if identity["selection_id"] != selection["selection_id"]:
+                continue
+            _verify_identity(identity, selection, row)
+            matched.append((candidate.parent, identity, run, candidate_run_id))
         if len(matched) != 1:
             raise ValueError(
                 f"expected one generation identity for {key}, found {len(matched)}; "
@@ -174,6 +191,13 @@ def stage_official_inputs(
         source = directory / "video.mp4"
         if not source.is_file():
             raise FileNotFoundError(source)
+        metadata = json.loads((directory / "metadata.json").read_text())
+        video_sha256 = _file_sha256(source)
+        if (
+            metadata.get("generation_id") != identity["generation_id"]
+            or metadata.get("video_sha256") != video_sha256
+        ):
+            raise ValueError("generated video differs from its identity metadata")
         _validate_video(source, row)
         target = method_dir / row["split"] / f"{row['scene_id']}_generated.mp4"
         _link_once(source, target)
@@ -182,6 +206,7 @@ def stage_official_inputs(
                 "scene_id": row["scene_id"],
                 "split": row["split"],
                 "generation_id": identity["generation_id"],
+                "video_sha256": video_sha256,
                 "source_video": str(source.resolve()),
                 "official_video": str(target.absolute()),
             }
@@ -317,8 +342,14 @@ def score_official(
         metric, camera = metric_commands(
             official_repo, benchmark_root, method_dir, split
         )
-        subprocess.run(camera, cwd=official_repo, check=True)
-        subprocess.run(metric, cwd=official_repo, check=True)
+        for command in (camera, metric):
+            for row in staged["staged"]:
+                if (
+                    row["split"] == split
+                    and _file_sha256(Path(row["source_video"])) != row["video_sha256"]
+                ):
+                    raise ValueError("staged video changed before official scoring")
+            subprocess.run(command, cwd=official_repo, check=True)
 
 
 def main() -> None:
