@@ -56,12 +56,14 @@ class TemporalProtocol:
     ) -> VideoLayout:
         if purpose not in {"train", "rollout"}:
             raise ValueError("purpose must be 'train' or 'rollout'")
+        if type(temporal_patch_size) is not int or temporal_patch_size <= 0:
+            raise ValueError("temporal patch size must be a positive integer")
         if self.chunk_latent_frames % temporal_patch_size:
             raise ValueError("latent chunk size must be divisible by temporal patch size")
         frames = (
             self.train_window_rgb_frames if purpose == "train" else self.rollout_rgb_frames
         )
-        return VideoLayout.from_codec(
+        layout = VideoLayout.from_codec(
             fps=self.fps,
             rgb_frame_count=frames,
             codec=codec,
@@ -69,6 +71,11 @@ class TemporalProtocol:
             latent_chunk_size=self.chunk_latent_frames,
             initial_condition_frames=self.initial_condition_rgb_frames,
         )
+        if layout.initial_condition_latent_frame_count % temporal_patch_size:
+            raise ValueError(
+                "initial condition latent boundary must align with temporal patch size"
+            )
+        return layout
 
     def validate_resources(
         self,
@@ -79,14 +86,23 @@ class TemporalProtocol:
     ) -> None:
         """Fail before allocation when data or a supplied memory estimate is insufficient."""
         required = max(self.train_window_rgb_frames, self.rollout_rgb_frames)
-        if available_rgb_frames is not None and available_rgb_frames < required:
-            raise ValueError(
-                f"source has {available_rgb_frames} RGB frames, but protocol requires {required}"
-            )
+        if available_rgb_frames is not None:
+            if type(available_rgb_frames) is not int or available_rgb_frames < 0:
+                raise ValueError("available_rgb_frames must be a non-negative integer")
+            if available_rgb_frames < required:
+                raise ValueError(
+                    f"source has {available_rgb_frames} RGB frames, but protocol requires {required}"
+                )
         if (estimated_gpu_gb is None) != (maximum_gpu_gb is None):
             raise ValueError("estimated_gpu_gb and maximum_gpu_gb must be configured together")
         if estimated_gpu_gb is not None:
-            if not all(isfinite(value) and value > 0 for value in (estimated_gpu_gb, maximum_gpu_gb)):
+            if not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and isfinite(value)
+                and value > 0
+                for value in (estimated_gpu_gb, maximum_gpu_gb)
+            ):
                 raise ValueError("GPU memory estimates must be finite and positive")
             if estimated_gpu_gb > maximum_gpu_gb:
                 raise ValueError(
@@ -96,43 +112,72 @@ class TemporalProtocol:
 
 
 def resolve_temporal_protocol(config: Mapping[str, Any]) -> TemporalProtocol:
-    """Parse the five canonical values, rejecting missing or legacy duplicates."""
+    """Parse the five canonical values without silently truncating user input."""
     try:
         train = config["train"]
         temporal = config["temporal"]
         rollout = config["rollout"]
+        raw_counts = {
+            "train.window_rgb_frames": train["window_rgb_frames"],
+            "temporal.chunk_latent_frames": temporal["chunk_latent_frames"],
+            "temporal.initial_condition_rgb_frames": temporal["initial_condition_rgb_frames"],
+            "rollout.rgb_frames": rollout["rgb_frames"],
+        }
+        for name, value in raw_counts.items():
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        raw_fps = temporal["fps"]
+        if isinstance(raw_fps, bool) or not isinstance(raw_fps, (int, float)):
+            raise ValueError("temporal.fps must be a number")
+        fps = float(raw_fps)
+        if not isfinite(fps) or fps <= 0:
+            raise ValueError("temporal.fps must be finite and positive")
         protocol = TemporalProtocol(
-            train_window_rgb_frames=int(train["window_rgb_frames"]),
-            chunk_latent_frames=int(temporal["chunk_latent_frames"]),
-            rollout_rgb_frames=int(rollout["rgb_frames"]),
-            initial_condition_rgb_frames=int(temporal["initial_condition_rgb_frames"]),
-            fps=float(temporal["fps"]),
+            train_window_rgb_frames=raw_counts["train.window_rgb_frames"],
+            chunk_latent_frames=raw_counts["temporal.chunk_latent_frames"],
+            rollout_rgb_frames=raw_counts["rollout.rgb_frames"],
+            initial_condition_rgb_frames=raw_counts["temporal.initial_condition_rgb_frames"],
+            fps=fps,
         )
-    except (KeyError, TypeError, ValueError) as exc:
+    except (KeyError, TypeError) as exc:
         raise ValueError(
             "temporal contract requires train.window_rgb_frames, "
             "temporal.chunk_latent_frames, temporal.initial_condition_rgb_frames, "
             "temporal.fps, and rollout.rgb_frames"
         ) from exc
-    integers = {
-        "train.window_rgb_frames": protocol.train_window_rgb_frames,
-        "temporal.chunk_latent_frames": protocol.chunk_latent_frames,
-        "temporal.initial_condition_rgb_frames": protocol.initial_condition_rgb_frames,
-        "rollout.rgb_frames": protocol.rollout_rgb_frames,
-    }
-    if any(value <= 0 for value in integers.values()):
-        raise ValueError("temporal frame counts must be positive")
-    if not isfinite(protocol.fps) or protocol.fps <= 0:
-        raise ValueError("temporal.fps must be finite and positive")
     if protocol.initial_condition_rgb_frames > min(
         protocol.train_window_rgb_frames, protocol.rollout_rgb_frames
     ):
         raise ValueError("initial condition exceeds the train or rollout extent")
-    for section in (config.get("dataset", {}), rollout):
-        if "fps" in section:
+
+    # Reject old chunk owners explicitly. Otherwise a typo or stale field can
+    # look active while the canonical temporal value silently wins.
+    legacy_chunk_keys = (
+        ("train", "chunk_latent_frames"),
+        ("flow_matching", "latent_frames_per_chunk"),
+        ("stage", "latent_frames_per_chunk"),
+        ("flow_matching", "chunk_duration_seconds"),
+        ("stage", "chunk_duration_seconds"),
+        ("temporal", "latent_frames_per_chunk"),
+        ("temporal", "chunk_duration_seconds"),
+        ("rollout", "chunk_duration_seconds"),
+    )
+    for section_name, key in legacy_chunk_keys:
+        section = config.get(section_name)
+        if isinstance(section, Mapping) and key in section:
+            raise ValueError(
+                f"{section_name}.{key} is a legacy chunk setting; "
+                "use temporal.chunk_latent_frames only"
+            )
+
+    dataset = config.get("dataset", {})
+    if isinstance(dataset, Mapping):
+        if "fps" in dataset:
             raise ValueError("fps has one owner: temporal.fps")
-    if "rgb_frames" in config.get("dataset", {}):
-        raise ValueError("training length has one owner: train.window_rgb_frames")
+        if "rgb_frames" in dataset:
+            raise ValueError("training length has one owner: train.window_rgb_frames")
+    if "fps" in rollout:
+        raise ValueError("fps has one owner: temporal.fps")
     if "duration_seconds" in rollout:
         raise ValueError("rollout duration is derived from frames and fps")
     return protocol

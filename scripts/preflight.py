@@ -65,13 +65,13 @@ def validate_preflight_config(cfg: DictConfig) -> None:
 
     temporal = resolve_temporal_protocol(cfg)
     temporal.layout(
-        CodecTemporalSpec(int(cfg.representation.temporal_compression)),
-        temporal_patch_size=int(cfg.model.patch_size[0]),
+        CodecTemporalSpec(cfg.representation.temporal_compression),
+        temporal_patch_size=cfg.model.patch_size[0],
         purpose="train",
     )
     temporal.layout(
-        CodecTemporalSpec(int(cfg.representation.temporal_compression)),
-        temporal_patch_size=int(cfg.model.patch_size[0]),
+        CodecTemporalSpec(cfg.representation.temporal_compression),
+        temporal_patch_size=cfg.model.patch_size[0],
         purpose="rollout",
     )
     resources = cfg.get("resources", {})

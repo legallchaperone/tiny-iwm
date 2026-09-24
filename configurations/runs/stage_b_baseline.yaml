@@ -47,7 +47,6 @@ validation:
   weights: model
   deterministic_noise_seed: 26000
   flow_time: 0.5
-  target_chunks: [1, 3, 5]
   selection: lowest_validation_flow_matching_mse
 runtime:
   platform: Modal

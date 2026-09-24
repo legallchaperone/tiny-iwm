@@ -65,7 +65,7 @@ def inspect_inputs() -> str:
     temporal = resolve_temporal_protocol(config)
     layout = temporal.layout(
         CodecTemporalSpec(8),
-        temporal_patch_size=int(config["model"]["patch_size"][0]),
+        temporal_patch_size=config["model"]["patch_size"][0],
         purpose="train",
     )
     if manifest["manifest_sha256"] != _manifest_id(manifest):
@@ -117,6 +117,8 @@ def inspect_inputs() -> str:
     if provenance["camera"]["intrinsics_space"] != "rgb_pixels":
         raise ValueError("Stage B camera convention differs from prepared data")
     del payload
+    if not layout.valid_target_chunk_indices:
+        raise ValueError("training window has no valid non-condition target chunk")
     for split in ("train", "validation"):
         for record in manifest["splits"][split]:
             validate_prepared_record(record, layout)
@@ -134,6 +136,7 @@ def inspect_inputs() -> str:
             "initial_checkpoint_id": checkpoint_id,
             "train_samples": len(manifest["splits"]["train"]),
             "validation_samples": len(manifest["splits"]["validation"]),
+            "validation_target_chunks": list(layout.valid_target_chunk_indices),
         },
         sort_keys=True,
     )
@@ -202,6 +205,20 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 raise ValueError(
                     f"prepared sample changed after CPU preflight: {record['prepared_path']}"
                 )
+    from core.temporal_config import resolve_temporal_protocol
+
+    temporal = resolve_temporal_protocol(config)
+    layout = temporal.layout(
+        CodecTemporalSpec(8),
+        temporal_patch_size=config["model"]["patch_size"][0],
+        purpose="train",
+    )
+    target_chunks = layout.valid_target_chunk_indices
+    if not target_chunks:
+        raise ValueError("training window has no valid non-condition target chunk")
+    if list(target_chunks) != preflight.get("validation_target_chunks"):
+        raise ValueError("resolved target chunks changed after CPU preflight")
+
     if not torch.cuda.is_available():
         raise RuntimeError("Stage B GPU function requires CUDA")
 
@@ -246,12 +263,6 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     if resumed.checkpoint_id != preflight["initial_checkpoint_id"]:
         raise ValueError("Stage B checkpoint identity changed after preflight")
 
-    from core.temporal_config import resolve_temporal_protocol
-
-    temporal = resolve_temporal_protocol(config)
-    layout = temporal.layout(
-        CodecTemporalSpec(8), temporal_patch_size=model.config.patch_size[0], purpose="train"
-    )
     flow_spec = FlowMatchSpec()
     builder = StageBBatchBuilder(flow_spec)
     samples = {
@@ -278,7 +289,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         generator: torch.Generator,
         fixed_time: float | None = None,
     ) -> torch.Tensor:
-        clean, camera, projection = item
+        clean, camera, projection, valid_latent_mask = item
         video = VideoBatch(
             sample_ids=("prepared",),
             sources=("official-prepared-volume",),
@@ -296,6 +307,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             target_chunk=target_chunk,
             generator=generator,
             flow_time=flow_time,
+            valid_latent_mask=valid_latent_mask,
         )
         with torch.autocast(device_type="cuda", dtype=dtype):
             prediction = model(
@@ -339,7 +351,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         def measure():
             losses = []
             for index, item in enumerate(samples["validation"]):
-                for target_chunk in config["validation"]["target_chunks"]:
+                for target_chunk in target_chunks:
                     generator = torch.Generator(device=device).manual_seed(
                         config["validation"]["deterministic_noise_seed"]
                         + index * 100
@@ -389,14 +401,16 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     if not verify_only:
         for step in range(1, config["optimization"]["steps"] + 1):
             item = samples["train"][(step - 1) % len(samples["train"])]
-            target_chunk = int(
-                torch.randint(
-                    len(layout.chunk_to_latent),
-                    (1,),
-                    generator=generator,
-                    device=device,
+            target_chunk = target_chunks[
+                int(
+                    torch.randint(
+                        len(target_chunks),
+                        (1,),
+                        generator=generator,
+                        device=device,
+                    )
                 )
-            )
+            ]
             optimizer.zero_grad(set_to_none=True)
             loss = loss_for(item, target_chunk=target_chunk, generator=generator)
             loss.backward()
@@ -447,14 +461,15 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         raise AssertionError("selected Stage B checkpoint cannot be resumed exactly")
 
     def correctness_gate():
-        clean, _, projection = samples["validation"][0]
+        clean, _, projection, _ = samples["validation"][0]
         identity = HistoryIdentity(
             "held-out-cache-gate", best_id, "camera-and-latent", "conditional"
         )
         session = HistorySession(model, layout, identity, camera_projection=projection)
-        session.commit_initial_prefix(identity, clean[:, :, :1])
+        initial_latent_count = layout.initial_condition_latent_frame_count
+        session.commit_initial_prefix(identity, clean[:, :, :initial_latent_count])
         deltas = []
-        for chunk_index in (0, 1, 2):
+        for chunk_index in target_chunks[:3]:
             latent_range = layout.latent_range_for_chunk(chunk_index)
             begin = sum(part.shape[2] for part in session.history)
             target = clean[:, :, begin : latent_range.stop]
@@ -481,6 +496,14 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                     )
             session.commit_clean(identity, chunk_index, target)
         camera = samples["validation"][0][1]
+        gate_target_chunk = target_chunks[1] if len(target_chunks) > 1 else target_chunks[0]
+        target_range = layout.latent_range_for_chunk(gate_target_chunk)
+        target_start = max(
+            target_range.start, layout.initial_condition_latent_frame_count
+        )
+        valid_latent_count = layout.valid_latent_frame_count
+        assert valid_latent_count is not None
+        target_stop = min(target_range.stop, valid_latent_count)
         base_video = VideoBatch(
             sample_ids=("held-out",),
             sources=("official-prepared-volume",),
@@ -496,10 +519,16 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         )
         fixed_time = torch.tensor([0.5], device=device, dtype=dtype)
         base = builder.build(
-            base_video, target_chunk=1, noise=noise, flow_time=fixed_time
+            base_video,
+            target_chunk=gate_target_chunk,
+            noise=noise,
+            flow_time=fixed_time,
+            valid_latent_mask=samples["validation"][0][3],
         )
         changed_future = clean.clone()
-        changed_future[:, :, 8:] += 0.25
+        future_start = target_range.stop
+        if future_start < valid_latent_count:
+            changed_future[:, :, future_start:valid_latent_count] += 0.25
         future_video = VideoBatch(
             sample_ids=("held-out",),
             sources=("official-prepared-volume",),
@@ -508,12 +537,16 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             latents=changed_future,
         )
         future = builder.build(
-            future_video, target_chunk=1, noise=noise, flow_time=fixed_time
+            future_video,
+            target_chunk=gate_target_chunk,
+            noise=noise,
+            flow_time=fixed_time,
+            valid_latent_mask=samples["validation"][0][3],
         )
         changed_target = clean.clone()
-        changed_target[:, :, 4:8] += 0.25
+        changed_target[:, :, target_start:target_stop] += 0.25
         adjusted_noise = noise.clone()
-        adjusted_noise[:, :, 4:8] -= 0.25
+        adjusted_noise[:, :, target_start:target_stop] -= 0.25
         target_video = VideoBatch(
             sample_ids=("held-out",),
             sources=("official-prepared-volume",),
@@ -522,14 +555,20 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             latents=changed_target,
         )
         target = builder.build(
-            target_video, target_chunk=1, noise=adjusted_noise, flow_time=fixed_time
+            target_video,
+            target_chunk=gate_target_chunk,
+            noise=adjusted_noise,
+            flow_time=fixed_time,
+            valid_latent_mask=samples["validation"][0][3],
         )
-        if not target.clean_condition_latents[:, :, 4:8].eq(0).all():
+        if not target.clean_condition_latents[:, :, target_start:target_stop].eq(0).all():
             raise AssertionError("target clean GT entered the separate clean branch")
         # BF16 arithmetic makes algebraically equivalent interpolation differ by
         # rounding. Hold the target z_t tensor bit-for-bit fixed for this replay.
         fixed_target_noisy = target.noisy_latents.clone()
-        fixed_target_noisy[:, :, 4:8] = base.noisy_latents[:, :, 4:8]
+        fixed_target_noisy[:, :, target_start:target_stop] = base.noisy_latents[
+            :, :, target_start:target_stop
+        ]
         inputs = (base.noisy_latents, future.noisy_latents, fixed_target_noisy)
         if not torch.equal(inputs[0], inputs[2]):
             raise AssertionError("controlled replay failed to fix the full noisy input")
@@ -542,7 +581,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                     base.model_time,
                     visibility_mask=mask,
                     camera_projection=projection,
-                )[:, :, 4:8]
+                )[:, :, target_start:target_stop]
                 for value in inputs
             ]
             repeat = model(
@@ -550,7 +589,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 base.model_time,
                 visibility_mask=mask,
                 camera_projection=projection,
-            )[:, :, 4:8]
+            )[:, :, target_start:target_stop]
         if any(not torch.isfinite(value).all() for value in (*outputs, repeat)):
             raise AssertionError("non-finite leakage prediction")
         repeat_delta = float((outputs[0] - repeat).abs().max())
@@ -571,7 +610,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
                 "target_clean_fixed_noisy_max_abs_delta": target_delta,
                 "identical_input_repeat_max_abs_delta": repeat_delta,
                 "bf16_unfixed_noisy_max_abs_delta": float(
-                    (base.noisy_latents[:, :, 4:8] - target.noisy_latents[:, :, 4:8])
+                    (base.noisy_latents[:, :, target_start:target_stop] - target.noisy_latents[:, :, target_start:target_stop])
                     .abs()
                     .max()
                 ),

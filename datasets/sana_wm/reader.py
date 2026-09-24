@@ -61,6 +61,8 @@ class SANAReader:
         self, record: ManifestRecord, *, rgb_frames: int, start_frame: int = 0
     ) -> SANASample:
         """Read one exact, camera-aligned training window without implicit padding."""
+        if type(rgb_frames) is not int or type(start_frame) is not int:
+            raise ValueError("rgb_frames and start_frame must be integers")
         if rgb_frames <= 0 or start_frame < 0:
             raise ValueError("rgb_frames must be positive and start_frame non-negative")
         sample = self.read(record)

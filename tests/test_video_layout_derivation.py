@@ -12,6 +12,7 @@ def test_causal_codec_derives_first_frame_and_exact_final_length():
         latent_chunk_size=64,
     )
 
+    assert layout.valid_latent_frame_count == 241
     assert layout.latent_frame_count == 242
     assert layout.rgb_frame_count == 965
     assert layout.valid_rgb_frame_count == 961
