@@ -55,7 +55,12 @@ class FMObjective:
     def loss(self, prediction: torch.Tensor, batch: ObjectiveBatch) -> torch.Tensor:
         if batch.prediction_type != self.prediction_type or batch.loss_time is None:
             raise ValueError("FM loss requires velocity target and scalar FM loss time")
+        # Stage B computes the model under bf16 autocast but evaluates its loss
+        # in fp32. Preserve that path while leaving Stage A's native precision
+        # unchanged when prediction and target already share a dtype.
+        target = batch.prediction_target.to(dtype=prediction.dtype)
+        time = batch.loss_time.to(dtype=prediction.dtype)
         return flow_matching_loss(
-            prediction, batch.prediction_target, loss_mask=batch.loss_mask,
-            time=batch.loss_time, spec=self.spec,
+            prediction, target, loss_mask=batch.loss_mask,
+            time=time, spec=self.spec,
         )

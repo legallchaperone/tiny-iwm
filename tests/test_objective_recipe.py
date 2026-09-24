@@ -87,6 +87,30 @@ def test_fm_adapter_matches_existing_stage_b_math():
     )
 
 
+def test_fm_stage_b_bf16_target_and_fp32_prediction_match_previous_loss():
+    source = _video()
+    video = VideoBatch(
+        source.sample_ids, source.sources, source.layout, source.camera,
+        latents=source.latents.to(torch.bfloat16),
+    )
+    spec = FlowMatchSpec()
+    objective = FMObjective(spec, build_training_policy("teacher_forced_causal"))
+    batch = objective.build_batch(
+        video, target_chunk=1,
+        noise=torch.full_like(video.latents, 2),
+        flow_time=torch.tensor([0.5], dtype=torch.bfloat16),
+    )
+    prediction = torch.zeros_like(batch.prediction_target, dtype=torch.float32, requires_grad=True)
+    actual = objective.loss(prediction, batch)
+    expected = flow_matching_loss(
+        prediction, batch.prediction_target.float(), loss_mask=batch.loss_mask,
+        time=batch.loss_time.float(), spec=spec,
+    )
+    torch.testing.assert_close(actual, expected)
+    actual.backward()
+    assert prediction.grad is not None and torch.isfinite(prediction.grad).all()
+
+
 def test_df_uses_temporal_token_noise_and_exact_clean_history():
     video = _video(patch=2)
     schedule = CosineDFSchedule(train_steps=10)
