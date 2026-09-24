@@ -6,7 +6,12 @@ accidentally beginning an expensive training run.
 """
 
 from .exp_base import BaseExperiment
+from .build import BuiltModel, build_model
 
 
 class WorldModelExperiment(BaseExperiment):
     compatible_algorithms = {}
+
+    def build_model(self) -> BuiltModel:
+        """Use the same resolved model construction as launchers and inference."""
+        return build_model(self.root_cfg)

@@ -202,7 +202,6 @@ def train(manifest_json: str) -> str:
 
     sys.path.insert(0, "/opt/tiny-iwm")
     from algorithms.world_model.flow import FlowMatchSpec, flow_matching_loss
-    from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
     from algorithms.world_model.models.prope import (
         TokenCameraProjection,
     )
@@ -211,6 +210,7 @@ def train(manifest_json: str) -> str:
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
     from core.temporal_config import resolve_temporal_protocol
+    from experiments.build import build_model, resolve_model_config
     from scripts.prepared_stage_data import (
         load_prepared_sample,
         validate_prepared_record,
@@ -232,17 +232,7 @@ def train(manifest_json: str) -> str:
     config_path = Path("configurations/runs/stage_a_baseline.yaml")
     resolved_config = yaml.safe_load(config_path.read_text())
     config_sha256 = _sha256_bytes(config_path.read_bytes())
-    model_values = resolved_config["model"]
-    model_config = JointVideoDiTConfig(
-        latent_channels=model_values["latent_channels"],
-        hidden_size=model_values["hidden_size"],
-        depth=model_values["depth"],
-        num_heads=model_values["num_heads"],
-        patch_size=tuple(model_values["patch_size"]),
-        mlp_ratio=model_values["mlp_ratio"],
-        qkv_bias=model_values["qkv_bias"],
-        prope_camera_dims=model_values["prope_camera_dims"],
-    )
+    _, model_config = resolve_model_config(resolved_config)
     temporal = resolve_temporal_protocol(resolved_config)
     layout = temporal.layout(
         CodecTemporalSpec(8),
@@ -265,7 +255,8 @@ def train(manifest_json: str) -> str:
     configure_cuda_math_policy()
     device = torch.device("cuda")
     dtype = torch.bfloat16
-    model = JointVideoDiT(model_config).to(device=device, dtype=dtype)
+    model_build = build_model(resolved_config)
+    model = model_build.model.to(device=device, dtype=dtype)
     optimizer = build_optimizer(model, OptimizerSpec(learning_rate=1e-4, weight_decay=0.01))
     scheduler = build_scheduler(optimizer, SchedulerSpec("constant"))
     ema = ExponentialMovingAverage(model, 0.9999)
@@ -346,7 +337,7 @@ def train(manifest_json: str) -> str:
         run_id=RUN_ID,
         stage="A",
         model={
-            "architecture": "joint_spatiotemporal_dit",
+            "architecture": model_build.architecture,
             "parameters": sum(value.numel() for value in model.parameters()),
             "config": resolved_config["model"],
         },

@@ -43,3 +43,14 @@ All configurations are automatically saved in wandb run.
 This repo is forked from [Boyuan Chen](https://boyuan.space/)'s research template [repo](https://github.com/buoyancy99/research-template). By its MIT license, you must keep the above sentence in `README.md` and the `LICENSE` file to credit the author.
 
 Prepared latent-cache windows must end on a codec-group boundary. The CPU preflight rejects a requested RGB length whose final cached latent also contains frames beyond that window; choose an aligned length (such as 161 frames with temporal compression 8) or use an RGB path that can encode its padded boundary itself.
+
+## Model construction
+
+`experiments.build.build_model` resolves a model once for training, rollout, or
+probing. The default `model=joint_dit` preserves the previous module names and
+checkpoint keys. `model=joint_dit_swiglu` selects a structurally different
+SwiGLU feed-forward network; `model.components.norm=rms_norm` and
+`model.components.position=none` are explicit internal alternatives. New
+component implementations must be wired into their small construction function.
+Unknown names fail during CPU preflight. A changed architecture or component
+requires a new checkpoint identity; old weights are never loaded implicitly.

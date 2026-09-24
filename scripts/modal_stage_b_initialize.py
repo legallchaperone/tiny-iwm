@@ -34,7 +34,8 @@ def initialize(
     sys.path.insert(0, "/opt/tiny-iwm")
     os.chdir("/opt/tiny-iwm")
     volume.reload()
-    from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
+    from algorithms.world_model.models import JointVideoDiT
+    from experiments.build import build_model
     from runtime import (
         CheckpointCompatibility, CheckpointProvenance, ExponentialMovingAverage,
         OptimizerSpec, SchedulerSpec, build_optimizer, build_scheduler,
@@ -48,11 +49,10 @@ def initialize(
     model_dtype = torch.float32 if source_weights == "model" else torch.bfloat16
 
     def new_model() -> JointVideoDiT:
-        return JointVideoDiT(JointVideoDiTConfig(
-            latent_channels=128, hidden_size=832, depth=24, num_heads=16,
-            patch_size=(1, 2, 2), mlp_ratio=4.0, qkv_bias=True,
-            prope_camera_dims=48,
-        )).to(dtype=model_dtype)
+        stage_a_config = yaml.safe_load(
+            Path("configurations/runs/stage_a_baseline.yaml").read_text()
+        )
+        return build_model(stage_a_config).model.to(dtype=model_dtype)
 
     optimizer_factory = lambda model: build_optimizer(
         model, OptimizerSpec(learning_rate=1e-4, weight_decay=0.01)

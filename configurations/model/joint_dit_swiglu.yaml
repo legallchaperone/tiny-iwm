@@ -1,6 +1,6 @@
-architecture: joint_spatiotemporal_dit
+architecture: joint_spatiotemporal_dit_swiglu
 initialization: random
-target_parameters: 300000000
+target_parameters: null
 latent_channels: 128
 depth: 24
 hidden_size: 832
@@ -12,7 +12,7 @@ prope_camera_dims: 48
 attention: joint_spatiotemporal_softmax
 components:
   block: dit_modulated
-  ffn: gelu_tanh
+  ffn: swiglu
   norm: layer_norm
   position: rope_3d
   conditioner: sinusoidal_timestep
