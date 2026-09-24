@@ -1,11 +1,12 @@
-"""One autoregressive Flow Matching loop for reference and cached execution."""
+"""One autoregressive rollout loop using an objective-compatible sampler."""
 
 import torch
 
-from algorithms.world_model.flow import euler_step
 from algorithms.world_model.models.dit import JointVideoDiT
 from algorithms.world_model.models.prope import TokenCameraProjection
 from core.video_layout import VideoLayout
+from inference.samplers import FMEulerSampler
+from inference.samplers.base import Sampler
 
 from .history import HistoryIdentity, HistorySession
 
@@ -22,6 +23,8 @@ def rollout_latents(
     mode: str = "cached",
     initial_history_policy: str = "allow_clean_prefill",
     camera_projection: TokenCameraProjection | None = None,
+    sampler: Sampler | None = None,
+    objective_name: str | None = None,
 ) -> torch.Tensor:
     """Generate all remaining chunks and return the full latent trajectory.
 
@@ -38,6 +41,14 @@ def rollout_latents(
         raise ValueError("source-image-only rollout rejects extra clean chunks")
     if mode not in {"cached", "reference"}:
         raise ValueError("mode must be 'cached' or 'reference'")
+    if sampler is None:
+        sampler = FMEulerSampler()
+        objective_name = "native_fm" if objective_name is None else objective_name
+    if objective_name != sampler.objective_name:
+        raise ValueError(
+            f"sampler {sampler.name} requires objective {sampler.objective_name}; "
+            f"received {objective_name!r}"
+        )
     session = HistorySession(
         model, layout, identity, camera_projection=camera_projection
     )
@@ -46,9 +57,7 @@ def rollout_latents(
         session.commit_clean(identity, session.next_chunk, chunk)
     sample = initial_chunks[0]
     generator = torch.Generator(device=sample.device).manual_seed(seed)
-    time_grid = torch.linspace(
-        1, 0, steps + 1, device=sample.device, dtype=sample.dtype
-    )
+    time_grid = sampler.grid(steps, device=sample.device, dtype=sample.dtype)
     for index in range(session.next_chunk, len(layout.chunk_to_latent)):
         target_range = layout.latent_range_for_chunk(index)
         length = target_range.stop - sum(chunk.shape[2] for chunk in session.history)
@@ -59,13 +68,13 @@ def rollout_latents(
             sample.shape[3],
             sample.shape[4],
         )
-        target = torch.randn(
+        target = sampler.initial_state(
             shape, generator=generator, device=sample.device, dtype=sample.dtype
         )
         for step in range(steps):
             time = time_grid[step].expand(sample.shape[0])
             next_time = time_grid[step + 1].expand(sample.shape[0])
-            velocity = session.predict(identity, index, target, time, mode=mode)
-            target = euler_step(target, velocity, time=time, next_time=next_time)
+            prediction = session.predict(identity, index, target, time, mode=mode)
+            target = sampler.step(target, prediction, time=time, next_time=next_time)
         session.commit_clean(identity, index, target)
     return torch.cat(session.history, dim=2)

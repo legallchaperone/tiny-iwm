@@ -54,3 +54,25 @@ SwiGLU feed-forward network; `model.components.norm=rms_norm` and
 component implementations must be wired into their small construction function.
 Unknown names fail during CPU preflight. A changed architecture or component
 requires a new checkpoint identity; old weights are never loaded implicitly.
+
+## Objective, policy, and sampler
+
+`experiments.build.build_recipe` constructs the model, training objective,
+visibility policy, and matching sampler from one resolved configuration. The
+default is native Flow Matching with velocity prediction and Euler sampling.
+The named `minimal_df` recipe uses a discrete cosine schedule, independent
+noise levels per temporal patch, epsilon prediction, and deterministic DDIM.
+It is a minimal engineering recipe, not a reproduction of a particular paper.
+
+Check the direct causal DF combination on CPU:
+
+```bash
+python -m scripts.preflight --output-dir outputs/df-preflight +name=df-preflight runtime.accelerator=cpu stage=causal_direct training_policy=teacher_forced_causal objective=minimal_df sampler=df_ddim rollout=debug_81
+```
+
+`stage=causal_direct` leaves `checkpoint.init_from` empty and uses random model
+initialization. `stage=causal_tf` retains the historical Stage A to B path.
+The CPU check rejects a mismatched objective, prediction type, policy, or
+sampler. Checkpoint loading also checks objective and prediction semantics
+before changing model or optimizer state. The historical Stage A/B run YAMLs
+still select the native FM recipe.

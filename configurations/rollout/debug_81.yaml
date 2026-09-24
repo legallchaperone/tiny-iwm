@@ -1,6 +1,5 @@
 rgb_frames: 81
-history_policy: full
-solver: euler
 sampling_steps: 4
+history_policy: full
 cfg_scale: null
 seed: 0

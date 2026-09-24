@@ -1,0 +1,7 @@
+name: causal_direct
+attention_visibility: chunk_causal
+teacher_forcing: true
+initial_checkpoint: null
+target_selection: uniform_nonempty_chunk
+clean_history: teacher_forced
+future_clean_storage: present_but_causally_invisible

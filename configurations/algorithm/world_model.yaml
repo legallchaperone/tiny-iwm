@@ -1,4 +1,4 @@
-objective: flow_matching
+objective: ${objective.name}
 flow:
   convention: native_linear_t0_clean_t1_noise
   time_distribution: uniform

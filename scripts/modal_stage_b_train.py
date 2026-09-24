@@ -160,14 +160,12 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
 
     sys.path.insert(0, "/opt/tiny-iwm")
     os.chdir("/opt/tiny-iwm")
-    from algorithms.world_model.flow import FlowMatchSpec, flow_matching_loss
     from algorithms.world_model.training_batch import (
         ChunkCausalVisibility,
-        StageBBatchBuilder,
     )
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
-    from experiments.build import build_model
+    from experiments.build import build_recipe
     from inference.history import HistoryIdentity, HistorySession
     from runtime import (
         CheckpointProvenance,
@@ -230,7 +228,8 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     torch.cuda.manual_seed_all(seed)
     configure_cuda_math_policy()
     device, dtype = torch.device("cuda"), torch.bfloat16
-    model_build = build_model(config)
+    recipe = build_recipe(config)
+    model_build = recipe.model
     model = model_build.model.to(device=device, dtype=torch.float32)
     optimizer = build_optimizer(
         model,
@@ -248,6 +247,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         optimizer=optimizer,
         scheduler=scheduler,
         ema=ema,
+        expected_semantics={"objective": recipe.objective.name, "prediction_type": recipe.objective.prediction_type},
     )
     if (
         resumed.global_step != 0
@@ -259,8 +259,6 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     if resumed.checkpoint_id != preflight["initial_checkpoint_id"]:
         raise ValueError("Stage B checkpoint identity changed after preflight")
 
-    flow_spec = FlowMatchSpec()
-    builder = StageBBatchBuilder(flow_spec)
     samples = {
         split: [
             load_prepared_sample(record, device=device, dtype=dtype, layout=layout)
@@ -298,7 +296,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             if fixed_time is None
             else torch.tensor([fixed_time], device=device, dtype=dtype)
         )
-        batch = builder.build(
+        batch = recipe.objective.build_batch(
             video,
             target_chunk=target_chunk,
             generator=generator,
@@ -307,18 +305,12 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         )
         with torch.autocast(device_type="cuda", dtype=dtype):
             prediction = model(
-                batch.noisy_latents,
-                batch.model_time,
+                batch.model_input,
+                batch.noise_condition,
                 visibility_mask=mask,
                 camera_projection=projection,
             )
-        return flow_matching_loss(
-            prediction.float(),
-            batch.target_velocity.float(),
-            loss_mask=batch.loss_mask,
-            time=batch.flow_time.float(),
-            spec=flow_spec,
-        )
+        return recipe.objective.loss(prediction.float(), batch)
 
     def with_validation_weights(task):
         use_ema = config["validation"]["weights"] == "ema"
@@ -387,6 +379,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             "preprocessing": manifest["transform"]["camera_intrinsics"],
         },
         resolved_config=config,
+        semantics={"objective": recipe.objective.name, "prediction_type": recipe.objective.prediction_type},
         parent_checkpoint_id=config["parent_checkpoint_id"],
     )
     generator = torch.Generator(device=device).manual_seed(seed)

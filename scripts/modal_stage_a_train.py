@@ -201,16 +201,14 @@ def train(manifest_json: str) -> str:
     import sys
 
     sys.path.insert(0, "/opt/tiny-iwm")
-    from algorithms.world_model.flow import FlowMatchSpec, flow_matching_loss
     from algorithms.world_model.models.prope import (
         TokenCameraProjection,
     )
-    from algorithms.world_model.training_batch import StageABatchBuilder
     from core.camera import CameraCondition
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
     from core.temporal_config import resolve_temporal_protocol
-    from experiments.build import build_model, resolve_model_config
+    from experiments.build import build_recipe, resolve_model_config
     from scripts.prepared_stage_data import (
         load_prepared_sample,
         validate_prepared_record,
@@ -255,13 +253,12 @@ def train(manifest_json: str) -> str:
     configure_cuda_math_policy()
     device = torch.device("cuda")
     dtype = torch.bfloat16
-    model_build = build_model(resolved_config)
+    recipe = build_recipe(resolved_config)
+    model_build = recipe.model
     model = model_build.model.to(device=device, dtype=dtype)
     optimizer = build_optimizer(model, OptimizerSpec(learning_rate=1e-4, weight_decay=0.01))
     scheduler = build_scheduler(optimizer, SchedulerSpec("constant"))
     ema = ExponentialMovingAverage(model, 0.9999)
-    flow_spec = FlowMatchSpec()
-    builder = StageABatchBuilder(flow_spec)
     train_cache = [load_prepared_sample(record, device=device, dtype=dtype, layout=layout) for record in train_records]
     validation_cache = [load_prepared_sample(record, device=device, dtype=dtype, layout=layout) for record in validation_records]
 
@@ -284,24 +281,18 @@ def train(manifest_json: str) -> str:
         flow_time = None
         if fixed_time is not None:
             flow_time = torch.tensor([fixed_time], device=device, dtype=dtype)
-        batch = builder.build(
+        batch = recipe.objective.build_batch(
             video,
             generator=generator,
             flow_time=flow_time,
             valid_latent_mask=valid_latent_mask,
         )
         prediction = model(
-            batch.noisy_latents,
-            batch.flow_time,
+            batch.model_input,
+            batch.noise_condition,
             camera_projection=projection,
         )
-        return flow_matching_loss(
-            prediction,
-            batch.target_velocity,
-            loss_mask=batch.loss_mask,
-            time=batch.flow_time,
-            spec=flow_spec,
-        )
+        return recipe.objective.loss(prediction, batch)
 
     @torch.no_grad()
     def validate() -> float:
@@ -353,6 +344,7 @@ def train(manifest_json: str) -> str:
             "preprocessing": manifest["transform"]["camera_intrinsics"],
         },
         resolved_config=resolved_config,
+        semantics={"objective": recipe.objective.name, "prediction_type": recipe.objective.prediction_type},
     )
     generator = torch.Generator(device=device).manual_seed(seed)
     training_losses: list[dict[str, object]] = []

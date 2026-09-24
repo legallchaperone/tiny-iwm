@@ -12,7 +12,7 @@ from omegaconf import DictConfig
 from utils.provenance import write_run_records
 from core.temporal_config import resolve_temporal_protocol
 from core.video_layout import CodecTemporalSpec
-from experiments.build import resolve_model_config
+from experiments.build import resolve_model_config, resolve_recipe_selection
 
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -65,6 +65,7 @@ def validate_preflight_config(cfg: DictConfig) -> None:
         raise ValueError("checkpoint.init_from and checkpoint.resume_from are mutually exclusive")
 
     _, model_config = resolve_model_config(cfg)
+    resolve_recipe_selection(cfg)
     temporal = resolve_temporal_protocol(cfg)
     temporal.layout(
         CodecTemporalSpec(cfg.representation.temporal_compression),

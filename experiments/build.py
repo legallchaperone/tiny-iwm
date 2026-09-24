@@ -6,6 +6,10 @@ from dataclasses import dataclass, fields
 from typing import Any, Mapping
 
 from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
+from algorithms.world_model.flow import FlowMatchSpec
+from algorithms.world_model.objectives import CosineDFObjective, CosineDFSchedule, FMObjective
+from algorithms.world_model.training_policies import TrainingPolicy, build_training_policy
+from inference.samplers import DFDDIMSampler, FMEulerSampler
 
 
 _COMPONENT_FIELDS = {
@@ -37,6 +41,21 @@ class BuiltModel:
     model: JointVideoDiT
     architecture: str
     capabilities: ModelCapabilities
+
+
+@dataclass(frozen=True)
+class BuiltRecipe:
+    model: BuiltModel
+    objective: FMObjective | CosineDFObjective
+    policy: TrainingPolicy
+    sampler: FMEulerSampler | DFDDIMSampler
+    sampling_steps: int
+
+    def __post_init__(self) -> None:
+        if self.objective.name != self.sampler.objective_name:
+            raise ValueError("objective and sampler names are incompatible")
+        if self.objective.prediction_type != self.sampler.prediction_type:
+            raise ValueError("objective prediction type differs from sampler")
 
 
 def resolve_model_config(root: Mapping[str, Any]) -> tuple[str, JointVideoDiTConfig]:
@@ -111,3 +130,75 @@ def build_model(root: Mapping[str, Any]) -> BuiltModel:
         architecture=architecture,
         capabilities=ModelCapabilities(camera_projection=config.prope_camera_dims is not None),
     )
+
+
+def resolve_recipe_selection(root: Mapping[str, Any]) -> tuple[str, str, str, int]:
+    """Resolve objective/policy/sampler and reject mismatched old stage fields."""
+    if all(key in root for key in ("objective", "training_policy", "sampler")):
+        for key in ("objective", "training_policy", "sampler"):
+            if not isinstance(root[key], Mapping):
+                raise ValueError(f"{key} configuration must be a mapping")
+        objective_name = root["objective"].get("name")
+        policy_name = root["training_policy"].get("name")
+        sampler_name = root["sampler"].get("name")
+        steps = root["sampler"].get("steps")
+        stage = root.get("stage")
+        if isinstance(stage, Mapping):
+            expected_policy = {
+                "bidirectional": "bidirectional",
+                "causal_tf": "teacher_forced_causal",
+                "causal_direct": "teacher_forced_causal",
+            }.get(stage.get("name"))
+            if expected_policy is not None and policy_name != expected_policy:
+                raise ValueError(
+                    f"stage {stage.get('name')} conflicts with training policy {policy_name}"
+                )
+    elif root.get("run_id") in {
+        "stage-a-sekai-subset-seed21-v1", "stage-b-sekai-subset-seed21-v2"
+    }:
+        objective_name = "native_fm"
+        policy_name = "bidirectional" if root["stage"] == "A" else "teacher_forced_causal"
+        sampler_name, steps = "fm_euler", 16
+    else:
+        raise ValueError("recipe requires objective, training_policy, and sampler groups")
+    if type(steps) is not int or steps <= 0:
+        raise ValueError("sampler.steps must be a positive integer")
+    compatible = {
+        "native_fm": ("fm_euler", {"bidirectional", "teacher_forced_causal"}),
+        "minimal_df": ("df_ddim", {"teacher_forced_causal"}),
+    }
+    if objective_name not in compatible:
+        raise ValueError(f"unsupported objective: {objective_name}")
+    required_sampler, policies = compatible[objective_name]
+    if sampler_name != required_sampler:
+        raise ValueError(
+            f"objective {objective_name} requires sampler {required_sampler}, got {sampler_name}"
+        )
+    if policy_name not in policies:
+        raise ValueError(f"objective {objective_name} cannot use policy {policy_name}")
+    prediction = {"native_fm": "velocity", "minimal_df": "epsilon"}[objective_name]
+    if "objective" in root and root["objective"].get("prediction_type") != prediction:
+        raise ValueError(f"objective {objective_name} requires prediction_type={prediction}")
+    if "sampler" in root and root["sampler"].get("prediction_type") != prediction:
+        raise ValueError(f"sampler {sampler_name} requires prediction_type={prediction}")
+    return objective_name, policy_name, sampler_name, steps
+
+
+def build_recipe(root: Mapping[str, Any]) -> BuiltRecipe:
+    """Construct one compatible model/objective/policy/sampler recipe."""
+    objective_name, policy_name, _, steps = resolve_recipe_selection(root)
+    model = build_model(root)
+    policy = build_training_policy(policy_name)
+    if objective_name == "native_fm":
+        values = root.get("objective", {}).get("flow", {})
+        spec = FlowMatchSpec(**values)
+        objective = FMObjective(spec, policy)
+        sampler = FMEulerSampler()
+    else:
+        values = root.get("objective", {}).get("schedule", {})
+        schedule = CosineDFSchedule(**values)
+        objective = CosineDFObjective(schedule, policy)
+        sampler = DFDDIMSampler(schedule)
+        if steps > schedule.train_steps:
+            raise ValueError("DF sampler.steps exceeds objective schedule.train_steps")
+    return BuiltRecipe(model, objective, policy, sampler, steps)

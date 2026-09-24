@@ -1,0 +1,6 @@
+name: minimal_df
+prediction_type: epsilon
+schedule:
+  train_steps: 1000
+  offset: 0.008
+  alpha_floor: 0.00001

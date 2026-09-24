@@ -1,0 +1,4 @@
+name: bidirectional
+history: clean_initial_condition
+target: all_non_condition_latents
+visibility: bidirectional

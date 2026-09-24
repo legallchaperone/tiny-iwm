@@ -4,10 +4,13 @@ defaults:
   - experiment: world_model
   - algorithm: world_model
   - model: joint_dit
+  - objective: native_fm
+  - training_policy: bidirectional
   - stage: bidirectional
   - representation: video_vae
   - conditioning: camera_prope
   - dataset: sana_train
+  - sampler: fm_euler
   - rollout: minute
   - evaluation: subset
   - probing: "off"

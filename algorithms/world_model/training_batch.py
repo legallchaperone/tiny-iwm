@@ -153,6 +153,56 @@ class ChunkCausalVisibility:
         return chunks[:, None] >= chunks[None, :]
 
 
+@dataclass(frozen=True)
+class TeacherForcedSelection:
+    """Policy-owned target and visibility geometry, independent of objective math."""
+
+    target_time: torch.Tensor
+    target_mask: torch.Tensor
+    valid_mask: torch.Tensor
+    loss_mask: torch.Tensor
+    visibility: ChunkCausalVisibility
+    target_range: tuple[int, int]
+
+
+def teacher_forced_selection(
+    batch: VideoBatch,
+    *,
+    target_chunk: int,
+    valid_latent_mask: torch.Tensor | None = None,
+) -> TeacherForcedSelection:
+    clean = batch.latents
+    if not isinstance(clean, torch.Tensor) or clean.ndim != 5:
+        raise ValueError("causal policy requires latents with shape [B, C, T, H, W]")
+    if clean.shape[2] != batch.layout.latent_frame_count:
+        raise ValueError("latent time dimension must match VideoLayout")
+    if not clean.is_floating_point() or not torch.isfinite(clean).all():
+        raise ValueError("causal policy latents must be finite floating-point values")
+    if not 0 <= target_chunk < len(batch.layout.chunk_to_latent):
+        raise IndexError("target_chunk is outside VideoLayout")
+    target_range = batch.layout.latent_range_for_chunk(target_chunk)
+    target_time = torch.zeros(clean.shape[2], dtype=torch.bool, device=clean.device)
+    target_time[target_range.start : target_range.stop] = True
+    target_time &= ~_condition_latent_mask(batch)
+    if not target_time.any():
+        raise ValueError("target chunk contains no non-condition latent")
+    target_mask = target_time[None, None, :, None, None].expand(
+        clean.shape[0], 1, clean.shape[2], clean.shape[3], clean.shape[4]
+    )
+    valid_mask = _valid_mask(clean, valid_latent_mask)
+    loss_mask = valid_mask & target_mask
+    if not loss_mask.any():
+        raise ValueError("causal target chunk has no valid target latents")
+    return TeacherForcedSelection(
+        target_time=target_time,
+        target_mask=target_mask,
+        valid_mask=valid_mask,
+        loss_mask=loss_mask,
+        visibility=ChunkCausalVisibility.from_layout(batch.layout),
+        target_range=(target_range.start, target_range.stop),
+    )
+
+
 class StageBBatchBuilder:
     """Build one teacher-forced noisy target chunk over clean causal branches."""
 
@@ -170,29 +220,13 @@ class StageBBatchBuilder:
         generator: torch.Generator | None = None,
     ) -> TrainingBatch:
         clean = batch.latents
-        if not isinstance(clean, torch.Tensor) or clean.ndim != 5:
-            raise ValueError("Stage B requires latents with shape [B, C, T, H, W]")
-        if clean.shape[2] != batch.layout.latent_frame_count:
-            raise ValueError("latent time dimension must match VideoLayout")
-        if not clean.is_floating_point() or not torch.isfinite(clean).all():
-            raise ValueError("Stage B latents must be finite floating-point values")
-        if not 0 <= target_chunk < len(batch.layout.chunk_to_latent):
-            raise IndexError("target_chunk is outside VideoLayout")
-
-        target_range = batch.layout.latent_range_for_chunk(target_chunk)
-        target_time = torch.zeros(clean.shape[2], dtype=torch.bool, device=clean.device)
-        target_time[target_range.start : target_range.stop] = True
-        condition_time = _condition_latent_mask(batch)
-        target_time &= ~condition_time
-        if not target_time.any():
-            raise ValueError("target chunk contains no non-condition latent")
-        target_mask = target_time[None, None, :, None, None].expand(
-            clean.shape[0], 1, clean.shape[2], clean.shape[3], clean.shape[4]
+        selection = teacher_forced_selection(
+            batch, target_chunk=target_chunk, valid_latent_mask=valid_latent_mask
         )
-        valid_mask = _valid_mask(clean, valid_latent_mask)
-        loss_mask = valid_mask & target_mask
-        if not loss_mask.any():
-            raise ValueError("Stage B target chunk has no valid target latents")
+        target_time = selection.target_time
+        target_mask = selection.target_mask
+        valid_mask = selection.valid_mask
+        loss_mask = selection.loss_mask
 
         if noise is None:
             noise = torch.randn(
@@ -222,7 +256,7 @@ class StageBBatchBuilder:
         velocity = torch.where(
             loss_mask, target_velocity(clean, noise), torch.zeros_like(clean)
         )
-        visibility = ChunkCausalVisibility.from_layout(batch.layout)
+        visibility = selection.visibility
         model_time = torch.zeros(
             (clean.shape[0], len(batch.layout.token_to_latent_ranges)),
             device=clean.device, dtype=flow_time.dtype,
@@ -248,7 +282,7 @@ class StageBBatchBuilder:
                 "attention": "chunk_causal",
                 "chunk_internal_attention": "bidirectional",
                 "target_chunk": target_chunk,
-                "target_latent_range": (target_range.start, target_range.stop),
+                "target_latent_range": selection.target_range,
                 "target_latent_indices": tuple(
                     target_time.nonzero(as_tuple=False).flatten().tolist()
                 ),

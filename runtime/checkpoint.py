@@ -50,6 +50,7 @@ class CheckpointProvenance:
     camera: Mapping[str, Any]
     resolved_config: Mapping[str, Any]
     parent_checkpoint_id: str | None = None
+    semantics: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
         if not self.run_id or not self.stage:
@@ -59,6 +60,8 @@ class CheckpointProvenance:
             if not value:
                 raise ValueError(f"checkpoint {name} provenance must be non-empty")
             _json_snapshot(value)
+        if self.semantics is not None:
+            _validate_semantics(self.semantics)
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -69,6 +72,7 @@ class CheckpointProvenance:
             "camera": _json_snapshot(self.camera),
             "resolved_config": _json_snapshot(self.resolved_config),
             "parent_checkpoint_id": self.parent_checkpoint_id,
+            "semantics": _json_snapshot(self.semantics) if self.semantics is not None else None,
         }
 
 
@@ -79,6 +83,7 @@ class CheckpointCompatibility:
     model: Mapping[str, Any]
     codec: Mapping[str, Any]
     camera: Mapping[str, Any]
+    semantics: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
         for name in ("model", "codec", "camera"):
@@ -86,6 +91,8 @@ class CheckpointCompatibility:
             if not value:
                 raise ValueError(f"expected {name} compatibility must be non-empty")
             _json_snapshot(value)
+        if self.semantics is not None:
+            _validate_semantics(self.semantics)
 
 
 @dataclass(frozen=True)
@@ -176,6 +183,12 @@ def initialize_new_stage(
                 getattr(expected_compatibility, name),
                 path=name,
             )
+        if expected_compatibility.semantics is not None:
+            _require_subset(
+                _checkpoint_semantics(provenance),
+                expected_compatibility.semantics,
+                path="semantics",
+            )
     if source_weights == "model":
         state = payload["model"]
     elif source_weights == "ema":
@@ -208,6 +221,7 @@ def resume_same_run(
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler,
     ema: ExponentialMovingAverage,
+    expected_semantics: Mapping[str, str] | None = None,
 ) -> ResumedRun:
     """Restore every same-run state component and its recorded scope."""
     payload, checkpoint_id = _load(path)
@@ -216,6 +230,11 @@ def resume_same_run(
         raise ValueError(
             f"resume run_id mismatch: checkpoint={provenance['run_id']}, "
             f"runtime={expected_run_id}"
+        )
+    if expected_semantics is not None:
+        _validate_semantics(expected_semantics)
+        _require_subset(
+            _checkpoint_semantics(provenance), expected_semantics, path="semantics"
         )
     if tuple(payload["resume_scope"]) != RESUME_SCOPE:
         raise ValueError("checkpoint resume scope is incomplete or unsupported")
@@ -278,6 +297,39 @@ def _json_snapshot(value: Mapping[str, Any]) -> dict[str, Any]:
         return json.loads(json.dumps(value, sort_keys=True))
     except (TypeError, ValueError) as error:
         raise ValueError("checkpoint provenance must be JSON serializable") from error
+
+
+def _validate_semantics(semantics: Mapping[str, str]) -> None:
+    if not isinstance(semantics, Mapping) or set(semantics) != {"objective", "prediction_type"}:
+        raise ValueError("checkpoint semantics require objective and prediction_type")
+    expected = {"native_fm": "velocity", "minimal_df": "epsilon"}
+    objective = semantics["objective"]
+    if objective not in expected or semantics["prediction_type"] != expected[objective]:
+        raise ValueError("checkpoint objective and prediction_type are incompatible")
+
+
+def _checkpoint_semantics(provenance: Mapping[str, Any]) -> Mapping[str, str]:
+    recorded = provenance.get("semantics")
+    if recorded is not None:
+        _validate_semantics(recorded)
+        return recorded
+    config = provenance.get("resolved_config", {})
+    if isinstance(config, Mapping):
+        objective = config.get("objective")
+        if isinstance(objective, Mapping):
+            semantics = {
+                "objective": objective.get("name"),
+                "prediction_type": objective.get("prediction_type"),
+            }
+            _validate_semantics(semantics)
+            return semantics
+        if "flow_matching" in config:
+            return {"objective": "native_fm", "prediction_type": "velocity"}
+        if provenance.get("run_id") == "stage-b-sekai-subset-seed21-v2":
+            stage = config.get("stage")
+            if isinstance(stage, Mapping) and stage.get("name") == "causal_tf" and not stage.get("df_timestep_mixture"):
+                return {"objective": "native_fm", "prediction_type": "velocity"}
+    raise ValueError("checkpoint lacks objective semantics; cannot establish compatibility")
 
 
 def _require_subset(actual: Any, expected: Any, *, path: str) -> None:
