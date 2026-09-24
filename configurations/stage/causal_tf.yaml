@@ -8,8 +8,6 @@ optimizer_initialization: fresh_adamw
 scheduler_initialization: fresh_constant
 progress_initialization: {global_step: 0, epoch: 0}
 ema_initialization: copy_loaded_model
-chunk_duration_seconds: 2.0
-latent_frames_per_chunk: 4
 target_selection: uniform_nonempty_chunk
 clean_history: teacher_forced
 future_clean_storage: present_but_causally_invisible

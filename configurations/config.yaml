@@ -17,6 +17,20 @@ defaults:
 
 debug: false
 
+# Sole temporal contract. Durations and codec/patch padding are derived from it.
+train:
+  window_rgb_frames: 161
+temporal:
+  chunk_latent_frames: 4
+  initial_condition_rgb_frames: 1
+  fps: 16
+
+# Optional pre-allocation facts supplied by a launcher after inspecting its data/GPU.
+resources:
+  available_rgb_frames: null
+  estimated_gpu_gb: null
+  maximum_gpu_gb: null
+
 # Disabled is the credential-free default.  Set mode=online and entity=<entity>
 # explicitly for managed logging.
 wandb:

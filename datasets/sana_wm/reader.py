@@ -57,6 +57,35 @@ class SANAReader:
             )
         return SANASample(record, frames, camera, metadata)
 
+    def read_window(
+        self, record: ManifestRecord, *, rgb_frames: int, start_frame: int = 0
+    ) -> SANASample:
+        """Read one exact, camera-aligned training window without implicit padding."""
+        if type(rgb_frames) is not int or type(start_frame) is not int:
+            raise ValueError("rgb_frames and start_frame must be integers")
+        if rgb_frames <= 0 or start_frame < 0:
+            raise ValueError("rgb_frames must be positive and start_frame non-negative")
+        sample = self.read(record)
+        stop = start_frame + rgb_frames
+        available = sample.frames_rgb.shape[0]
+        if stop > available:
+            raise SampleReadError(
+                record.sample_id,
+                "window",
+                f"requested [{start_frame}, {stop}) but source has {available} frames",
+            )
+        camera = CameraData(
+            sample.camera.c2w[start_frame:stop],
+            sample.camera.intrinsics[start_frame:stop],
+            sample.camera.timestamps_seconds[start_frame:stop],
+        )
+        return SANASample(
+            sample.record,
+            sample.frames_rgb[start_frame:stop],
+            camera,
+            {**sample.metadata, "window_start_frame": start_frame, "window_rgb_frames": rgb_frames},
+        )
+
     def _path(self, record: ManifestRecord, component: str, relative: str) -> Path:
         try:
             path = (self.data_root / relative).resolve()

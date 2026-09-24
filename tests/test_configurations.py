@@ -15,7 +15,9 @@ def test_default_configuration_composes():
         cfg = compose(config_name="config")
 
     assert cfg.model.architecture == "joint_spatiotemporal_dit"
-    assert cfg.dataset.rgb_frames == 961
+    assert cfg.train.window_rgb_frames == 161
+    assert cfg.rollout.rgb_frames == 961
+    assert cfg.temporal.fps == 16
     assert cfg.experiment.tasks == []
     assert cfg.wandb.mode == "disabled"
     assert cfg.algorithm.training.batch_size == 1

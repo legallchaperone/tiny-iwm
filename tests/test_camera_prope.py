@@ -69,6 +69,7 @@ def test_projection_subframes_and_spatial_tiling_come_from_video_layout():
         rgb_frame_count=9,
         codec=CodecTemporalSpec(temporal_compression=2),
         temporal_patch_size=2,
+        latent_chunk_size=2,
     )
     projection = build_token_camera_projection(
         _camera(), layout, grid_shape=(3, 2, 3), image_size=(120, 160)

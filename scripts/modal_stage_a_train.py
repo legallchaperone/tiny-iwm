@@ -210,7 +210,11 @@ def train(manifest_json: str) -> str:
     from core.camera import CameraCondition
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
-    from scripts.prepared_stage_data import load_prepared_sample
+    from core.temporal_config import resolve_temporal_protocol
+    from scripts.prepared_stage_data import (
+        load_prepared_sample,
+        validate_prepared_record,
+    )
     from runtime import (
         CheckpointProvenance,
         ExponentialMovingAverage,
@@ -222,14 +226,36 @@ def train(manifest_json: str) -> str:
         save_checkpoint,
     )
 
-    if not torch.cuda.is_available():
-        raise RuntimeError("CWX-21 training requires CUDA")
     manifest = json.loads(manifest_json)
     if manifest.get("run_id") != RUN_ID:
         raise ValueError("prepared manifest belongs to a different run")
     config_path = Path("configurations/runs/stage_a_baseline.yaml")
     resolved_config = yaml.safe_load(config_path.read_text())
     config_sha256 = _sha256_bytes(config_path.read_bytes())
+    model_values = resolved_config["model"]
+    model_config = JointVideoDiTConfig(
+        latent_channels=model_values["latent_channels"],
+        hidden_size=model_values["hidden_size"],
+        depth=model_values["depth"],
+        num_heads=model_values["num_heads"],
+        patch_size=tuple(model_values["patch_size"]),
+        mlp_ratio=model_values["mlp_ratio"],
+        qkv_bias=model_values["qkv_bias"],
+        prope_camera_dims=model_values["prope_camera_dims"],
+    )
+    temporal = resolve_temporal_protocol(resolved_config)
+    layout = temporal.layout(
+        CodecTemporalSpec(8),
+        temporal_patch_size=model_config.patch_size[0],
+        purpose="train",
+    )
+    train_records = manifest["splits"]["train"]
+    validation_records = manifest["splits"]["validation"]
+    for record in (*train_records, *validation_records):
+        validate_prepared_record(record, layout)
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("CWX-21 training requires CUDA")
     seed = int(resolved_config["seed"])
     import random
 
@@ -239,32 +265,12 @@ def train(manifest_json: str) -> str:
     configure_cuda_math_policy()
     device = torch.device("cuda")
     dtype = torch.bfloat16
-    model_config = JointVideoDiTConfig(
-        latent_channels=128,
-        hidden_size=832,
-        depth=24,
-        num_heads=16,
-        patch_size=(1, 2, 2),
-        mlp_ratio=4.0,
-        qkv_bias=True,
-        prope_camera_dims=48,
-    )
     model = JointVideoDiT(model_config).to(device=device, dtype=dtype)
     optimizer = build_optimizer(model, OptimizerSpec(learning_rate=1e-4, weight_decay=0.01))
     scheduler = build_scheduler(optimizer, SchedulerSpec("constant"))
     ema = ExponentialMovingAverage(model, 0.9999)
     flow_spec = FlowMatchSpec()
     builder = StageABatchBuilder(flow_spec)
-    layout = VideoLayout.from_codec(
-        fps=16,
-        rgb_frame_count=961,
-        codec=CodecTemporalSpec(8),
-        temporal_patch_size=1,
-        initial_condition_frames=1,
-    )
-
-    train_records = manifest["splits"]["train"]
-    validation_records = manifest["splits"]["validation"]
     train_cache = [load_prepared_sample(record, device=device, dtype=dtype, layout=layout) for record in train_records]
     validation_cache = [load_prepared_sample(record, device=device, dtype=dtype, layout=layout) for record in validation_records]
 
@@ -272,6 +278,7 @@ def train(manifest_json: str) -> str:
         clean: torch.Tensor,
         camera: CameraCondition,
         projection: TokenCameraProjection,
+        valid_latent_mask: torch.Tensor,
         *,
         generator: torch.Generator,
         fixed_time: float | None = None,
@@ -286,7 +293,12 @@ def train(manifest_json: str) -> str:
         flow_time = None
         if fixed_time is not None:
             flow_time = torch.tensor([fixed_time], device=device, dtype=dtype)
-        batch = builder.build(video, generator=generator, flow_time=flow_time)
+        batch = builder.build(
+            video,
+            generator=generator,
+            flow_time=flow_time,
+            valid_latent_mask=valid_latent_mask,
+        )
         prediction = model(
             batch.noisy_latents,
             batch.flow_time,
@@ -310,9 +322,20 @@ def train(manifest_json: str) -> str:
         ema.copy_to(model)
         model.eval()
         losses = []
-        for index, (clean, camera, projection) in enumerate(validation_cache):
+        for index, (clean, camera, projection, valid_latent_mask) in enumerate(validation_cache):
             generator = torch.Generator(device=device).manual_seed(21000 + index)
-            losses.append(float(loss_for(clean, camera, projection, generator=generator, fixed_time=0.5)))
+            losses.append(
+                float(
+                    loss_for(
+                        clean,
+                        camera,
+                        projection,
+                        valid_latent_mask,
+                        generator=generator,
+                        fixed_time=0.5,
+                    )
+                )
+            )
         state = model.state_dict()
         for name, value in raw.items():
             state[name].copy_(value)
@@ -349,9 +372,13 @@ def train(manifest_json: str) -> str:
     started = time.perf_counter()
     model.train()
     for step in range(1, 101):
-        clean, camera, projection = train_cache[(step - 1) % len(train_cache)]
+        clean, camera, projection, valid_latent_mask = train_cache[
+            (step - 1) % len(train_cache)
+        ]
         optimizer.zero_grad(set_to_none=True)
-        loss = loss_for(clean, camera, projection, generator=generator)
+        loss = loss_for(
+            clean, camera, projection, valid_latent_mask, generator=generator
+        )
         loss.backward()
         optimizer.step()
         scheduler.step()

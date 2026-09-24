@@ -12,14 +12,15 @@ def test_causal_codec_derives_first_frame_and_exact_final_length():
         latent_chunk_size=64,
     )
 
-    assert layout.latent_frame_count == 241
-    assert layout.rgb_frame_count == 961
+    assert layout.valid_latent_frame_count == 241
+    assert layout.latent_frame_count == 242
+    assert layout.rgb_frame_count == 965
     assert layout.valid_rgb_frame_count == 961
     assert layout.rgb_range_for_latent(0) == FrameRange(0, 1)
     assert layout.rgb_range_for_latent(240) == FrameRange(957, 961)
     assert layout.latent_range_for_token(0) == FrameRange(0, 2)
-    assert layout.latent_range_for_token(120) == FrameRange(240, 241)
-    assert layout.latent_range_for_chunk(3) == FrameRange(192, 241)
+    assert layout.latent_range_for_token(120) == FrameRange(240, 242)
+    assert layout.latent_range_for_chunk(3) == FrameRange(192, 242)
     assert layout.writer_rgb_indices_for_chunk(3)[-1] == 960
 
 
@@ -51,18 +52,20 @@ def test_uniform_codec_and_chunk_boundaries_share_one_mapping():
         initial_condition_frames=2,
     )
 
-    assert layout.latent_frame_count == 4
-    assert layout.rgb_frame_count == 12
+    assert layout.latent_frame_count == 6
+    assert layout.rgb_frame_count == 18
     assert layout.latent_to_rgb == (
         FrameRange(0, 3),
         FrameRange(3, 6),
         FrameRange(6, 9),
         FrameRange(9, 12),
+        FrameRange(12, 15),
+        FrameRange(15, 18),
     )
-    assert layout.token_to_latent_ranges == (FrameRange(0, 3), FrameRange(3, 4))
-    assert layout.chunk_to_latent == (FrameRange(0, 3), FrameRange(3, 4))
+    assert layout.token_to_latent_ranges == (FrameRange(0, 3), FrameRange(3, 6))
+    assert layout.chunk_to_latent == (FrameRange(0, 3), FrameRange(3, 6))
     assert layout.writer_rgb_indices_for_chunk(1) == (9,)
-    assert layout.camera_rgb_indices_for_chunk(1) == (9,)
+    assert layout.camera_rgb_indices_for_chunk(1) == (9, 9, 9)
     assert layout.token_time_range_seconds(1) == pytest.approx((0.45, 0.5))
 
 

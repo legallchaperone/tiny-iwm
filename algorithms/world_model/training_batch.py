@@ -75,7 +75,11 @@ class StageABatchBuilder:
                 raise ValueError("flow_time falls outside the configured sampling bounds")
 
         mixed_target = interpolate(clean, noise, flow_time)
-        model_input = torch.where(condition_mask, clean, mixed_target)
+        model_input = torch.where(
+            valid_mask,
+            torch.where(condition_mask, clean, mixed_target),
+            torch.zeros_like(clean),
+        )
         clean_condition = torch.where(condition_mask, clean, torch.zeros_like(clean))
         velocity = target_velocity(clean, noise)
         velocity = torch.where(loss_mask, velocity, torch.zeros_like(velocity))
@@ -209,7 +213,11 @@ class StageBBatchBuilder:
                 raise ValueError("flow_time falls outside the configured sampling bounds")
 
         mixed = interpolate(clean, noise, flow_time)
-        model_input = torch.where(target_mask, mixed, clean)
+        model_input = torch.where(
+            valid_mask,
+            torch.where(target_mask, mixed, clean),
+            torch.zeros_like(clean),
+        )
         clean_branches = torch.where(target_mask, torch.zeros_like(clean), clean)
         velocity = torch.where(
             loss_mask, target_velocity(clean, noise), torch.zeros_like(clean)

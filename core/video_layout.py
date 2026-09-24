@@ -8,7 +8,7 @@ instead of reimplementing stride, boundary, or padding arithmetic.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil
+from math import ceil, isfinite
 from typing import Tuple
 
 
@@ -41,8 +41,8 @@ class CodecTemporalSpec:
     first_frame_is_independent: bool = True
 
     def __post_init__(self) -> None:
-        if self.temporal_compression <= 0:
-            raise ValueError("temporal_compression must be positive")
+        if type(self.temporal_compression) is not int or self.temporal_compression <= 0:
+            raise ValueError("temporal_compression must be a positive integer")
 
 
 @dataclass(frozen=True)
@@ -65,13 +65,14 @@ class VideoLayout:
     rgb_is_padding: Tuple[bool, ...]
     initial_condition_rgb: FrameRange
     valid_rgb_frame_count: int | None = None
+    valid_latent_frame_count: int | None = None
     token_to_latent_ranges: Tuple[FrameRange, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.fps <= 0:
-            raise ValueError("fps must be positive")
-        if self.rgb_frame_count <= 0 or self.latent_frame_count <= 0:
-            raise ValueError("frame counts must be positive")
+        if isinstance(self.fps, bool) or not isinstance(self.fps, (int, float)) or not isfinite(self.fps) or self.fps <= 0:
+            raise ValueError("fps must be finite and positive")
+        if any(type(value) is not int or value <= 0 for value in (self.rgb_frame_count, self.latent_frame_count)):
+            raise ValueError("frame counts must be positive integers")
         if len(self.latent_to_rgb) != self.latent_frame_count:
             raise ValueError("latent_to_rgb must contain one range per latent frame")
         if len(self.rgb_is_padding) != self.rgb_frame_count:
@@ -88,6 +89,15 @@ class VideoLayout:
         if not 0 < valid_count <= self.rgb_frame_count:
             raise ValueError("valid_rgb_frame_count must be within the RGB extent")
         object.__setattr__(self, "valid_rgb_frame_count", valid_count)
+        expected_valid_latents = sum(
+            rgb_range.start < valid_count for rgb_range in self.latent_to_rgb
+        )
+        latent_valid_count = self.valid_latent_frame_count
+        if latent_valid_count is None:
+            latent_valid_count = expected_valid_latents
+        if latent_valid_count != expected_valid_latents:
+            raise ValueError("valid_latent_frame_count must match the requested RGB extent")
+        object.__setattr__(self, "valid_latent_frame_count", latent_valid_count)
         expected_padding = tuple(
             index >= valid_count for index in range(self.rgb_frame_count)
         )
@@ -132,25 +142,39 @@ class VideoLayout:
         what writers use after decoding.
         """
 
+        integer_values = {
+            "rgb_frame_count": rgb_frame_count,
+            "temporal_patch_size": temporal_patch_size,
+            "latent_chunk_size": latent_chunk_size,
+            "initial_condition_frames": initial_condition_frames,
+        }
+        if any(type(value) is not int for value in integer_values.values()):
+            raise ValueError("frame, patch, and chunk counts must be integers")
+        if isinstance(fps, bool) or not isinstance(fps, (int, float)) or not isfinite(fps) or fps <= 0:
+            raise ValueError("fps must be finite and positive")
         if rgb_frame_count <= 0:
             raise ValueError("rgb_frame_count must be positive")
         if temporal_patch_size <= 0 or latent_chunk_size <= 0:
             raise ValueError("patch and chunk sizes must be positive")
+        if latent_chunk_size % temporal_patch_size:
+            raise ValueError("latent chunk size must be divisible by temporal patch size")
         if not 0 < initial_condition_frames <= rgb_frame_count:
             raise ValueError("initial_condition_frames must be within the input")
 
         stride = codec.temporal_compression
         if codec.first_frame_is_independent:
             compressed_count = ceil(max(0, rgb_frame_count - 1) / stride)
-            latent_count = 1 + compressed_count
-            padded_rgb_count = 1 + compressed_count * stride
+            requested_latent_count = 1 + compressed_count
+            latent_count = ceil(requested_latent_count / temporal_patch_size) * temporal_patch_size
+            padded_rgb_count = 1 + (latent_count - 1) * stride
             latent_ranges = [FrameRange(0, 1)]
             latent_ranges.extend(
                 FrameRange(1 + index * stride, 1 + (index + 1) * stride)
-                for index in range(compressed_count)
+                for index in range(latent_count - 1)
             )
         else:
-            latent_count = ceil(rgb_frame_count / stride)
+            requested_latent_count = ceil(rgb_frame_count / stride)
+            latent_count = ceil(requested_latent_count / temporal_patch_size) * temporal_patch_size
             padded_rgb_count = latent_count * stride
             latent_ranges = [
                 FrameRange(index * stride, (index + 1) * stride)
@@ -171,6 +195,7 @@ class VideoLayout:
             ),
             initial_condition_rgb=FrameRange(0, initial_condition_frames),
             valid_rgb_frame_count=rgb_frame_count,
+            valid_latent_frame_count=requested_latent_count,
             token_to_latent_ranges=token_ranges,
         )
 
@@ -188,6 +213,35 @@ class VideoLayout:
         if not 0 <= token_index < len(self.token_to_latent_ranges):
             raise IndexError("token index out of range")
         return self.token_to_latent_ranges[token_index]
+
+    @property
+    def initial_condition_latent_frame_count(self) -> int:
+        """Number of complete codec latents covered by the initial RGB prefix."""
+
+        boundary = self.initial_condition_rgb.stop
+        count = 0
+        for rgb_range in self.latent_to_rgb:
+            if rgb_range.start < boundary < rgb_range.stop:
+                raise ValueError(
+                    "initial condition boundary must align with a codec latent boundary"
+                )
+            if rgb_range.stop <= boundary:
+                count += 1
+        return count
+
+    @property
+    def valid_target_chunk_indices(self) -> Tuple[int, ...]:
+        """Chunks containing at least one real, non-condition latent."""
+
+        condition_end = self.initial_condition_latent_frame_count
+        valid_end = self.valid_latent_frame_count
+        assert valid_end is not None
+        return tuple(
+            index
+            for index, latent_range in enumerate(self.chunk_to_latent)
+            if max(latent_range.start, condition_end)
+            < min(latent_range.stop, valid_end)
+        )
 
     def latent_range_for_chunk(self, chunk_index: int) -> FrameRange:
         if not 0 <= chunk_index < len(self.chunk_to_latent):

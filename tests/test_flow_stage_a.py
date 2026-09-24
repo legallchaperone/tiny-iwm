@@ -88,6 +88,7 @@ def test_stage_a_uses_one_time_per_example_and_respects_valid_mask():
     )
     assert built.flow_time.shape == (1,)
     assert not built.loss_mask[0, 0, -1, 0, 0]
+    assert built.noisy_latents[:, :, -1].eq(0).all()
     assert built.target_velocity[0, 0, -1, 0, 0] == 0
 
 

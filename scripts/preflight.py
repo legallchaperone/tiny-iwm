@@ -10,6 +10,8 @@ from hydra import compose, initialize_config_dir
 from omegaconf import DictConfig
 
 from utils.provenance import write_run_records
+from core.temporal_config import resolve_temporal_protocol
+from core.video_layout import CodecTemporalSpec
 
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -60,6 +62,24 @@ def validate_preflight_config(cfg: DictConfig) -> None:
         raise ValueError(f"multiple resume selectors configured: {', '.join(resume_selectors)}")
     if init_selectors and resume_selectors:
         raise ValueError("checkpoint.init_from and checkpoint.resume_from are mutually exclusive")
+
+    temporal = resolve_temporal_protocol(cfg)
+    temporal.layout(
+        CodecTemporalSpec(cfg.representation.temporal_compression),
+        temporal_patch_size=cfg.model.patch_size[0],
+        purpose="train",
+    )
+    temporal.layout(
+        CodecTemporalSpec(cfg.representation.temporal_compression),
+        temporal_patch_size=cfg.model.patch_size[0],
+        purpose="rollout",
+    )
+    resources = cfg.get("resources", {})
+    temporal.validate_resources(
+        available_rgb_frames=resources.get("available_rgb_frames"),
+        estimated_gpu_gb=resources.get("estimated_gpu_gb"),
+        maximum_gpu_gb=resources.get("maximum_gpu_gb"),
+    )
 
 
 def compose_validate_and_write(output_dir: Path, overrides: Sequence[str]):

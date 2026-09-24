@@ -47,6 +47,23 @@ def test_stage_b_replaces_only_target_with_noisy_fm_state() -> None:
     assert torch.equal(built.model_time, torch.tensor([[0, 0, 0.5, 0.5, 0, 0]]))
 
 
+def test_stage_b_zero_pads_invalid_latents_inside_the_target_chunk() -> None:
+    batch = _video_batch()
+    valid = torch.ones(1, 6, 1, 1, dtype=torch.bool)
+    valid[:, -1] = False
+    built = StageBBatchBuilder(FlowMatchSpec()).build(
+        batch,
+        target_chunk=2,
+        noise=torch.full_like(batch.latents, 10),
+        flow_time=torch.tensor([0.5]),
+        valid_latent_mask=valid,
+    )
+
+    assert built.loss_mask[0, 0, 4, 0, 0]
+    assert not built.loss_mask[0, 0, 5, 0, 0]
+    assert built.noisy_latents[:, :, 5].eq(0).all()
+
+
 def test_chunk_mask_is_bidirectional_inside_and_causal_between_chunks() -> None:
     visibility = ChunkCausalVisibility((0, 0, 1, 1, 2, 2))
     mask = visibility.materialize(spatial_tokens_per_temporal_token=2)
@@ -101,9 +118,8 @@ def test_clean_history_is_visible_to_target() -> None:
 
 
 def test_temporal_patch_must_not_cross_chunk_boundary() -> None:
-    layout = VideoLayout.from_codec(
-        fps=1, rgb_frame_count=6, codec=CodecTemporalSpec(1),
-        temporal_patch_size=3, latent_chunk_size=2, initial_condition_frames=1,
-    )
-    with pytest.raises(ValueError, match="must not cross"):
-        ChunkCausalVisibility.from_layout(layout)
+    with pytest.raises(ValueError, match="divisible"):
+        VideoLayout.from_codec(
+            fps=1, rgb_frame_count=6, codec=CodecTemporalSpec(1),
+            temporal_patch_size=3, latent_chunk_size=2, initial_condition_frames=1,
+        )
