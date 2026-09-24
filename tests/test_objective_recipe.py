@@ -235,3 +235,26 @@ def test_df_grid_stays_strictly_decreasing_with_bf16_latents():
     assert grid.dtype == torch.float32
     assert grid[0] == 1 and grid[-1] == 0
     assert torch.all(grid[:-1] > grid[1:])
+
+
+def test_ddim_bf16_update_uses_distinct_fp32_schedule_coefficients():
+    sampler = DFDDIMSampler(CosineDFSchedule(train_steps=1000))
+    grid = sampler.grid(400, device=torch.device("cpu"), dtype=torch.bfloat16)
+    time, next_time = grid[288:289], grid[289:290]
+    alpha = sampler.schedule.alpha_bar(time)
+    next_alpha = sampler.schedule.alpha_bar(next_time)
+    assert alpha != next_alpha
+    assert alpha.to(torch.bfloat16) == next_alpha.to(torch.bfloat16)
+    state = torch.ones((1, 1, 1, 1, 1), dtype=torch.bfloat16)
+    epsilon = torch.ones_like(state)
+    updated = sampler.step(state, epsilon, time=time, next_time=next_time)
+    shape = (1, 1, 1, 1, 1)
+    expected_clean = (
+        state.float() - (1 - alpha).sqrt().reshape(shape) * epsilon.float()
+    ) / alpha.sqrt().reshape(shape)
+    expected = (
+        next_alpha.sqrt().reshape(shape) * expected_clean
+        + (1 - next_alpha).sqrt().reshape(shape) * epsilon.float()
+    )
+    torch.testing.assert_close(updated, expected.to(torch.bfloat16))
+    assert not torch.equal(updated, state)

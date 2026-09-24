@@ -46,10 +46,17 @@ class DFDDIMSampler:
             raise ValueError("DDIM state, epsilon prediction, and time shapes must align")
         if torch.any(next_time >= time):
             raise ValueError("DDIM requires decreasing timesteps")
-        alpha = self.schedule.alpha_bar(time).to(device=state.device, dtype=state.dtype)
-        next_alpha = self.schedule.alpha_bar(next_time).to(device=state.device, dtype=state.dtype)
+        # BF16 schedule coefficients can coincide at adjacent timesteps even
+        # when their fp32 values differ. Perform the DDIM update in fp32, then
+        # round only the resulting latent state back to its storage dtype.
+        compute_dtype = torch.float64 if state.dtype == torch.float64 else torch.float32
+        alpha = self.schedule.alpha_bar(time).to(device=state.device, dtype=compute_dtype)
+        next_alpha = self.schedule.alpha_bar(next_time).to(device=state.device, dtype=compute_dtype)
         shape = (state.shape[0],) + (1,) * (state.ndim - 1)
         alpha = alpha.reshape(shape)
         next_alpha = next_alpha.reshape(shape)
-        clean_estimate = (state - (1 - alpha).sqrt() * prediction) / alpha.sqrt()
-        return next_alpha.sqrt() * clean_estimate + (1 - next_alpha).sqrt() * prediction
+        state_fp = state.to(compute_dtype)
+        prediction_fp = prediction.to(compute_dtype)
+        clean_estimate = (state_fp - (1 - alpha).sqrt() * prediction_fp) / alpha.sqrt()
+        updated = next_alpha.sqrt() * clean_estimate + (1 - next_alpha).sqrt() * prediction_fp
+        return updated.to(state.dtype)
