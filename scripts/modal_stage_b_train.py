@@ -160,8 +160,10 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
 
     sys.path.insert(0, "/opt/tiny-iwm")
     os.chdir("/opt/tiny-iwm")
+    from algorithms.world_model.flow import FlowMatchSpec
     from algorithms.world_model.training_batch import (
         ChunkCausalVisibility,
+        StageBBatchBuilder,
     )
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
@@ -177,6 +179,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         configure_cuda_math_policy,
         resume_same_run,
         save_checkpoint,
+        validate_checkpoint_provenance,
     )
     from scripts.prepared_stage_data import load_prepared_sample
 
@@ -230,6 +233,9 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     device, dtype = torch.device("cuda"), torch.bfloat16
     recipe = build_recipe(config)
     model_build = recipe.model
+    # The published correctness gate replays legacy FM TrainingBatch fields.
+    # Keep its builder explicit until that gate has a separate neutral protocol.
+    gate_builder = StageBBatchBuilder(FlowMatchSpec())
     model = model_build.model.to(device=device, dtype=torch.float32)
     optimizer = build_optimizer(
         model,
@@ -440,9 +446,9 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         optimizer=optimizer,
         scheduler=scheduler,
         ema=ema,
+        expected_semantics={"objective": recipe.objective.name, "prediction_type": recipe.objective.prediction_type},
     )
-    if selected.provenance != provenance.snapshot():
-        raise ValueError("selected Stage B checkpoint provenance differs from this run")
+    validate_checkpoint_provenance(selected.provenance, provenance)
     if verify_only:
         best_step = selected.global_step
         best_metric = None
@@ -507,7 +513,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             generator=torch.Generator(device=device).manual_seed(26099),
         )
         fixed_time = torch.tensor([0.5], device=device, dtype=dtype)
-        base = builder.build(
+        base = gate_builder.build(
             base_video,
             target_chunk=gate_target_chunk,
             noise=noise,
@@ -525,7 +531,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             camera=camera,
             latents=changed_future,
         )
-        future = builder.build(
+        future = gate_builder.build(
             future_video,
             target_chunk=gate_target_chunk,
             noise=noise,
@@ -543,7 +549,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
             camera=camera,
             latents=changed_target,
         )
-        target = builder.build(
+        target = gate_builder.build(
             target_video,
             target_chunk=gate_target_chunk,
             noise=adjusted_noise,

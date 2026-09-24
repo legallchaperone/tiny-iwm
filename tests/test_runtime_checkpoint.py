@@ -17,6 +17,7 @@ from runtime import (
     initialize_new_stage,
     resume_same_run,
     save_checkpoint,
+    validate_checkpoint_provenance,
 )
 
 
@@ -210,11 +211,23 @@ def test_pinned_legacy_stage_b_initialization_resumes_as_fm(tmp_path):
             resolved_config={"stage": {"name": "causal_tf", "df_timestep_mixture": False}},
         ),
     )
-    resume_same_run(
+    resumed = resume_same_run(
         path, expected_run_id="stage-b-sekai-subset-seed21-v2",
         model=model, optimizer=optimizer, scheduler=scheduler, ema=ema,
         expected_semantics={"objective": "native_fm", "prediction_type": "velocity"},
     )
+    expected = CheckpointProvenance(
+        run_id="stage-b-sekai-subset-seed21-v2", stage="B",
+        model={"architecture": "tiny-test"}, codec={"id": "codec"},
+        camera={"method": "test"},
+        resolved_config={"stage": {"name": "causal_tf", "df_timestep_mixture": False}},
+        semantics={"objective": "native_fm", "prediction_type": "velocity"},
+    )
+    validate_checkpoint_provenance(resumed.provenance, expected)
+    changed = dict(resumed.provenance)
+    changed["camera"] = {"method": "different"}
+    with pytest.raises(ValueError, match="provenance differs"):
+        validate_checkpoint_provenance(changed, expected)
 
 
 @pytest.mark.parametrize("source_weights", ["model", "ema"])

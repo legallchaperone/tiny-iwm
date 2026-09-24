@@ -116,6 +116,24 @@ class ResumedRun:
     provenance: Mapping[str, Any]
 
 
+def validate_checkpoint_provenance(
+    recorded: Mapping[str, Any], expected: CheckpointProvenance
+) -> None:
+    """Compare a selected checkpoint, allowing only the legacy semantics omission."""
+    if expected.semantics is not None:
+        _require_subset(
+            _checkpoint_semantics(recorded), expected.semantics, path="semantics"
+        )
+    elif recorded.get("semantics") is not None:
+        raise ValueError("selected checkpoint provenance has unexpected semantics")
+    recorded_fields = {key: value for key, value in recorded.items() if key != "semantics"}
+    expected_fields = {
+        key: value for key, value in expected.snapshot().items() if key != "semantics"
+    }
+    if recorded_fields != expected_fields:
+        raise ValueError("selected checkpoint provenance differs from this run")
+
+
 def save_checkpoint(
     path: str | Path,
     *,

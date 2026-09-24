@@ -9,6 +9,7 @@ from .checkpoint import (
     initialize_new_stage,
     resume_same_run,
     save_checkpoint,
+    validate_checkpoint_provenance,
 )
 from .ema import ExponentialMovingAverage
 from .training import (
@@ -36,4 +37,5 @@ __all__ = [
     "initialize_new_stage",
     "resume_same_run",
     "save_checkpoint",
+    "validate_checkpoint_provenance",
 ]
