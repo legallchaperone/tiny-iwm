@@ -73,7 +73,7 @@ def run_gate() -> str:
     import yaml
 
     stage_a_config = yaml.safe_load(
-        (ROOT / "configurations/runs/stage_a_baseline.yaml").read_text()
+        Path("configurations/runs/stage_a_baseline.yaml").read_text()
     )
     model = build_model(stage_a_config).model.to(device=device, dtype=dtype)
     optimizer = build_optimizer(model, OptimizerSpec(learning_rate=1e-4, weight_decay=0.01))

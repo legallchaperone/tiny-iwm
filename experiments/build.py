@@ -68,6 +68,8 @@ def resolve_model_config(root: Mapping[str, Any]) -> tuple[str, JointVideoDiTCon
         raise ValueError(f"unsupported model fields: {sorted(unknown)}")
     values = {key: model_values[key] for key in field_names if key in model_values}
     if "attention" in model_values:
+        if "attention_kind" in values and values["attention_kind"] != model_values["attention"]:
+            raise ValueError("model.attention conflicts with model.attention_kind")
         values["attention_kind"] = model_values["attention"]
     for component, field in _COMPONENT_FIELDS.items():
         if component in components:

@@ -122,6 +122,14 @@ def test_unknown_model_and_camera_mismatch_fail_explicitly():
         resolve_model_config(root)
 
 
+def test_conflicting_attention_selectors_fail_before_build():
+    root = _small_root()
+    root["model"]["attention"] = "joint_spatiotemporal_softmax"
+    root["model"]["attention_kind"] = "unimplemented"
+    with pytest.raises(ValueError, match="attention conflicts"):
+        resolve_model_config(root)
+
+
 def test_hydra_model_variant_passes_cpu_preflight_with_small_shape():
     with initialize_config_dir(config_dir=str(CONFIG_DIR), version_base=None):
         cfg = compose(config_name="config", overrides=[
