@@ -47,6 +47,22 @@ def test_prepared_record_rejects_short_latents_and_camera_trajectory():
         )
 
 
+def test_prepared_cache_rejects_a_window_inside_a_codec_group():
+    layout = VideoLayout.from_codec(
+        fps=16,
+        rgb_frame_count=160,
+        codec=CodecTemporalSpec(8),
+        temporal_patch_size=2,
+        latent_chunk_size=4,
+        initial_condition_frames=9,
+    )
+    record = {"latent_shape": [128, 121, 4, 4], "camera_frames": 160}
+    with pytest.raises(ValueError, match="codec boundary"):
+        validate_prepared_record(record, layout)
+    with pytest.raises(ValueError, match="codec boundary"):
+        pad_prepared_latents(np.ones((128, 121, 4, 4), dtype=np.float32), layout)
+
+
 def test_patch_padding_does_not_copy_future_latents_and_is_masked_from_loss():
     layout = _layout()
     source = np.ones((2, 121, 2, 3), dtype=np.float32)

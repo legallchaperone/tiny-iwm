@@ -37,3 +37,5 @@ All configurations are automatically saved in wandb run.
 ---
 
 This repo is forked from [Boyuan Chen](https://boyuan.space/)'s research template [repo](https://github.com/buoyancy99/research-template). By its MIT license, you must keep the above sentence in `README.md` and the `LICENSE` file to credit the author.
+
+Prepared latent-cache windows must end on a codec-group boundary. The CPU preflight rejects a requested RGB length whose final cached latent also contains frames beyond that window; choose an aligned length (such as 161 frames with temporal compression 8) or use an RGB path that can encode its padded boundary itself.

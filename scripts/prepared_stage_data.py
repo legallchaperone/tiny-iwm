@@ -17,6 +17,7 @@ def validate_prepared_record(record: dict[str, object], layout: VideoLayout) -> 
     camera_frames = record.get("camera_frames")
     valid_latent_frames = layout.valid_latent_frame_count
     assert valid_latent_frames is not None
+    _require_codec_aligned_window(layout)
     if (
         not isinstance(latent_shape, list)
         or len(latent_shape) != 4
@@ -35,10 +36,24 @@ def validate_prepared_record(record: dict[str, object], layout: VideoLayout) -> 
         )
 
 
+def _require_codec_aligned_window(layout: VideoLayout) -> None:
+    """Reject cached latents whose final codec group extends beyond the window."""
+    valid_latent_frames = layout.valid_latent_frame_count
+    assert valid_latent_frames is not None
+    last_range = layout.latent_to_rgb[valid_latent_frames - 1]
+    if last_range.stop != layout.output_rgb_frame_count:
+        raise ValueError(
+            "prepared-cache window must end on a codec boundary; requested frame "
+            f"{layout.output_rgb_frame_count} splits latent group "
+            f"[{last_range.start}, {last_range.stop})"
+        )
+
+
 def pad_prepared_latents(
     latents: np.ndarray, layout: VideoLayout
 ) -> tuple[np.ndarray, np.ndarray]:
     """Copy only real window latents and zero-fill codec/patch suffix padding."""
+    _require_codec_aligned_window(layout)
     if latents.ndim != 4:
         raise ValueError("prepared latents must have [C,T,H,W] shape")
     valid_latent_frames = layout.valid_latent_frame_count
