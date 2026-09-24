@@ -22,20 +22,20 @@ sources:
     existing_local_mappings:
     - local_path: .github/workflows/tests.yml
       upstream_path: .github/workflows/tests.yml
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: .gitignore
       upstream_path: .gitignore
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: .vscode/launch.json
       upstream_path: .vscode/launch.json
       reuse_kind: vendored
@@ -70,12 +70,12 @@ sources:
         current_state: modified-after-import
     - local_path: algorithms/README.md
       upstream_path: algorithms/README.md
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: algorithms/__init__.py
       upstream_path: algorithms/__init__.py
       reuse_kind: vendored
@@ -214,12 +214,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: configurations/README.md
       upstream_path: configurations/README.md
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: configurations/algorithm/base_algo.yaml
       upstream_path: configurations/algorithm/base_algo.yaml
       reuse_kind: vendored
@@ -270,12 +270,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: configurations/cluster/harvard_fas.yaml
       upstream_path: configurations/cluster/harvard_fas.yaml
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: configurations/cluster/mit_satori.yaml
       upstream_path: configurations/cluster/mit_satori.yaml
       reuse_kind: vendored
@@ -310,12 +310,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: configurations/config.yaml
       upstream_path: configurations/config.yaml
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: configurations/dataset/base_dataset.yaml
       upstream_path: configurations/dataset/base_dataset.yaml
       reuse_kind: vendored
@@ -366,12 +366,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: configurations/sweep/example_sweep.yaml
       upstream_path: configurations/sweep/example_sweep.yaml
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: data/README.md
       upstream_path: data/README.md
       reuse_kind: vendored
@@ -382,20 +382,20 @@ sources:
         current_state: unchanged-since-import
     - local_path: datasets/README.md
       upstream_path: datasets/README.md
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: datasets/__init__.py
       upstream_path: datasets/__init__.py
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: datasets/example_classification/__init__.py
       upstream_path: datasets/example_classification/__init__.py
       reuse_kind: vendored
@@ -446,12 +446,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: experiments/__init__.py
       upstream_path: experiments/__init__.py
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: experiments/example_classification.py
       upstream_path: experiments/example_classification.py
       reuse_kind: vendored
@@ -462,12 +462,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: experiments/example_helloworld.py
       upstream_path: experiments/example_helloworld.py
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: experiments/exp_base.py
       upstream_path: experiments/exp_base.py
       reuse_kind: vendored
@@ -478,12 +478,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: main.py
       upstream_path: main.py
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: pyproject.toml
       upstream_path: pyproject.toml
       reuse_kind: vendored
@@ -502,20 +502,20 @@ sources:
         current_state: unchanged-since-import
     - local_path: requirements.txt
       upstream_path: requirements.txt
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: scripts/README.md
       upstream_path: scripts/README.md
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: scripts/dummy_script.sh
       upstream_path: scripts/dummy_script.sh
       reuse_kind: vendored
@@ -526,12 +526,12 @@ sources:
         current_state: unchanged-since-import
     - local_path: tests/test_configurations.py
       upstream_path: tests/test_configurations.py
-      reuse_kind: vendored
+      reuse_kind: adapted
       verification:
         method: tree-match-verified-in-CWX-5
         imported_local_commit: d1fe60d8eaad9bbe25863a580057dd0fa3f410a5
         upstream_commit: e4a3f528d4aad7872adf6ad9cd94f80c06d91e48
-        current_state: unchanged-since-import
+        current_state: modified-after-import
     - local_path: tests/test_example_algorithms.py
       upstream_path: tests/test_example_algorithms.py
       reuse_kind: vendored

@@ -33,9 +33,11 @@ was rerun during this milestone.
   Modal Volume used by the launchers. The design repository does not contain
   those checkpoint binaries, so their current remote availability is not
   asserted here.
-- `third_party/UPSTREAMS.yaml` is the authority for source reuse and pinned
-  revisions. Existing references in `design.md` are not a substitute for that
-  record.
+- `third_party/UPSTREAMS.yaml` records pinned upstream revisions and per-file
+  provenance. Its `current_state` values are live claims and must stay aligned
+  with edits since the imported commit. E0 reconciles locally changed template
+  mappings as `adapted` / `modified-after-import`; an upstream reference alone
+  does not imply that current code is unchanged upstream code.
 
 ## Compatibility rules for E1–E5
 
