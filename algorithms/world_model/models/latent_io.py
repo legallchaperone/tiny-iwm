@@ -78,3 +78,13 @@ class LatentPatchIO(nn.Module):
         time, height, width = layout.original_shape
         return latents[:, :, :time, :height, :width]
 
+
+def build_latent_io(
+    kind: str,
+    latent_channels: int,
+    hidden_size: int,
+    patch_size: tuple[int, int, int],
+) -> LatentPatchIO:
+    if kind != "conv3d_patch":
+        raise ValueError(f"unsupported latent I/O component: {kind}")
+    return LatentPatchIO(latent_channels, hidden_size, patch_size)

@@ -1,24 +1,23 @@
-from typing import Optional, Union
-from omegaconf import DictConfig
-import pathlib
-from lightning.pytorch.loggers.wandb import WandbLogger
+from __future__ import annotations
 
-from .exp_base import BaseExperiment
-from .example_classification import ClassificationExperiment
-from .example_helloworld import HelloWorldExperiment
-from .world_model import WorldModelExperiment
+from importlib import import_module
+from typing import Optional, TYPE_CHECKING, Union
+import pathlib
+
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
 
 # each key has to be a yaml file under '[project_root]/configurations/experiment' without .yaml suffix
 exp_registry = dict(
-    world_model=WorldModelExperiment,
-    example_classification=ClassificationExperiment,
-    example_helloworld=HelloWorldExperiment,
+    world_model="experiments.world_model:WorldModelExperiment",
+    example_classification="experiments.example_classification:ClassificationExperiment",
+    example_helloworld="experiments.example_helloworld:HelloWorldExperiment",
 )
 
 
 def build_experiment(
-    cfg: DictConfig, logger: Optional[WandbLogger] = None, ckpt_path: Optional[Union[str, pathlib.Path]] = None
-) -> BaseExperiment:
+    cfg: DictConfig, logger: Optional[object] = None, ckpt_path: Optional[Union[str, pathlib.Path]] = None
+):
     """
     Build an experiment instance based on registry
     :param cfg: configuration file
@@ -32,4 +31,6 @@ def build_experiment(
             "Make sure you register it correctly in 'experiments/__init__.py' under the same name as yaml file."
         )
 
-    return exp_registry[cfg.experiment._name](cfg, logger, ckpt_path)
+    module_name, class_name = exp_registry[cfg.experiment._name].split(":")
+    experiment_class = getattr(import_module(module_name), class_name)
+    return experiment_class(cfg, logger, ckpt_path)

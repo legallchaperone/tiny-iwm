@@ -6,10 +6,10 @@ from typing import Iterable
 import torch
 from torch import nn
 
-from .blocks import DiTBlock, OBSERVATION_POINTS
+from .blocks import OBSERVATION_POINTS, _norm, build_block
 from .attention import AttentionKV
-from .conditioning import TimestepConditioner
-from .latent_io import LatentPatchIO
+from .conditioning import build_conditioner
+from .latent_io import build_latent_io
 from .position import token_coordinates
 from .prope import TokenCameraProjection
 
@@ -24,6 +24,13 @@ class JointVideoDiTConfig:
     mlp_ratio: float = 4.0
     qkv_bias: bool = True
     prope_camera_dims: int | None = None
+    block_kind: str = "dit_modulated"
+    attention_kind: str = "joint_spatiotemporal_softmax"
+    ffn_kind: str = "gelu_tanh"
+    norm_kind: str = "layer_norm"
+    position_kind: str = "rope_3d"
+    conditioner_kind: str = "sinusoidal_timestep"
+    latent_io_kind: str = "conv3d_patch"
 
     def __post_init__(self) -> None:
         if self.depth <= 0:
@@ -32,6 +39,18 @@ class JointVideoDiTConfig:
             raise ValueError("hidden_size and num_heads must be positive")
         if self.hidden_size % self.num_heads:
             raise ValueError("hidden_size must be divisible by num_heads")
+        supported = {
+            "block_kind": {"dit_modulated"},
+            "attention_kind": {"joint_spatiotemporal_softmax"},
+            "ffn_kind": {"gelu_tanh", "swiglu"},
+            "norm_kind": {"layer_norm", "rms_norm"},
+            "position_kind": {"rope_3d", "none"},
+            "conditioner_kind": {"sinusoidal_timestep"},
+            "latent_io_kind": {"conv3d_patch"},
+        }
+        for field, choices in supported.items():
+            if getattr(self, field) not in choices:
+                raise ValueError(f"unsupported {field}: {getattr(self, field)!r}; choose {sorted(choices)}")
 
 
 class JointVideoDiT(nn.Module):
@@ -46,23 +65,27 @@ class JointVideoDiT(nn.Module):
     def __init__(self, config: JointVideoDiTConfig) -> None:
         super().__init__()
         self.config = config
-        self.latent_io = LatentPatchIO(
-            config.latent_channels, config.hidden_size, config.patch_size
+        self.latent_io = build_latent_io(
+            config.latent_io_kind, config.latent_channels,
+            config.hidden_size, config.patch_size,
         )
-        self.timestep = TimestepConditioner(config.hidden_size)
+        self.timestep = build_conditioner(config.conditioner_kind, config.hidden_size)
         self.blocks = nn.ModuleList(
-            DiTBlock(
-                config.hidden_size,
-                config.num_heads,
+            build_block(
+                config.block_kind,
+                hidden_size=config.hidden_size,
+                num_heads=config.num_heads,
                 mlp_ratio=config.mlp_ratio,
                 qkv_bias=config.qkv_bias,
                 prope_camera_dims=config.prope_camera_dims,
+                ffn_kind=config.ffn_kind,
+                norm_kind=config.norm_kind,
+                position_kind=config.position_kind,
+                attention_kind=config.attention_kind,
             )
             for _ in range(config.depth)
         )
-        self.final_norm = nn.LayerNorm(
-            config.hidden_size, elementwise_affine=False, eps=1e-6
-        )
+        self.final_norm = _norm(config.norm_kind, config.hidden_size)
         self.final_modulation = nn.Sequential(
             nn.SiLU(), nn.Linear(config.hidden_size, config.hidden_size * 2)
         )

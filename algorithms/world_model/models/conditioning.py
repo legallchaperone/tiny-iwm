@@ -40,3 +40,9 @@ class TimestepConditioner(nn.Module):
         # cross the model precision boundary exactly once before the MLP.
         embedding = embedding.to(dtype=self.mlp[0].weight.dtype)
         return self.mlp(embedding)
+
+
+def build_conditioner(kind: str, hidden_size: int) -> TimestepConditioner:
+    if kind != "sinusoidal_timestep":
+        raise ValueError(f"unsupported conditioner component: {kind}")
+    return TimestepConditioner(hidden_size)

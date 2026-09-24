@@ -49,7 +49,7 @@ def run_gate() -> str:
     os.chdir("/opt/tiny-iwm")
     volume.reload()
     from algorithms.world_model.flow import euler_step
-    from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
+    from experiments.build import build_model
     from algorithms.world_model.models.prope import (
         TokenCameraProjection,
         build_token_camera_projection,
@@ -70,18 +70,12 @@ def run_gate() -> str:
     configure_cuda_math_policy()
     device = torch.device("cuda")
     dtype = torch.bfloat16
-    model = JointVideoDiT(
-        JointVideoDiTConfig(
-            latent_channels=128,
-            hidden_size=832,
-            depth=24,
-            num_heads=16,
-            patch_size=(1, 2, 2),
-            mlp_ratio=4.0,
-            qkv_bias=True,
-            prope_camera_dims=48,
-        )
-    ).to(device=device, dtype=dtype)
+    import yaml
+
+    stage_a_config = yaml.safe_load(
+        (ROOT / "configurations/runs/stage_a_baseline.yaml").read_text()
+    )
+    model = build_model(stage_a_config).model.to(device=device, dtype=dtype)
     optimizer = build_optimizer(model, OptimizerSpec(learning_rate=1e-4, weight_decay=0.01))
     scheduler = build_scheduler(optimizer, SchedulerSpec("constant"))
     ema = ExponentialMovingAverage(model, 0.9999)

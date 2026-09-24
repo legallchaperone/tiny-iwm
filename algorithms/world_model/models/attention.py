@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from .position import apply_3d_rope
+from .position import apply_position
 from .prope import TokenCameraProjection, apply_camera_projection
 
 
@@ -25,6 +25,7 @@ class JointSelfAttention(nn.Module):
         num_heads: int,
         qkv_bias: bool = True,
         prope_camera_dims: int | None = None,
+        position_kind: str = "rope_3d",
     ) -> None:
         super().__init__()
         if hidden_size % num_heads:
@@ -32,6 +33,9 @@ class JointSelfAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         self.prope_camera_dims = prope_camera_dims
+        if position_kind not in {"rope_3d", "none"}:
+            raise ValueError(f"unsupported position component: {position_kind}")
+        self.position_kind = position_kind
         if prope_camera_dims is not None and not 0 < prope_camera_dims <= self.head_dim:
             raise ValueError("prope_camera_dims must fit within each attention head")
         self.qkv = nn.Linear(hidden_size, hidden_size * 3, bias=qkv_bias)
@@ -51,7 +55,7 @@ class JointSelfAttention(nn.Module):
             batch, token_count, 3, self.num_heads, self.head_dim
         )
         query, key, value = qkv.permute(2, 0, 3, 1, 4).unbind(dim=0)
-        query, key = apply_3d_rope(query, key, coordinates)
+        query, key = apply_position(self.position_kind, query, key, coordinates)
         if camera_projection is not None:
             if self.prope_camera_dims is None:
                 raise ValueError(
@@ -95,6 +99,12 @@ class JointSelfAttention(nn.Module):
         if return_kv_cache:
             return output, AttentionKV(key, value)
         return output
+
+
+def build_attention(kind: str, **kwargs) -> JointSelfAttention:
+    if kind != "joint_spatiotemporal_softmax":
+        raise ValueError(f"unsupported attention component: {kind}")
+    return JointSelfAttention(**kwargs)
 
 
 def _attention_mask(

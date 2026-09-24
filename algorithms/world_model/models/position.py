@@ -3,6 +3,19 @@
 import torch
 
 
+def apply_position(
+    kind: str,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    coordinates: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if kind == "rope_3d":
+        return apply_3d_rope(query, key, coordinates)
+    if kind == "none":
+        return query, key
+    raise ValueError(f"unsupported position component: {kind}")
+
+
 def token_coordinates(
     grid_shape: tuple[int, int, int],
     *,
@@ -57,4 +70,3 @@ def apply_3d_rope(
         return torch.cat((rotated, value[..., pair_count * 2 :]), dim=-1)
 
     return rotate(query), rotate(key)
-

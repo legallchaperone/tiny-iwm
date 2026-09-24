@@ -57,15 +57,17 @@ def inspect_inputs() -> str:
     sys.path.insert(0, "/opt/tiny-iwm")
     from core.temporal_config import resolve_temporal_protocol
     from core.video_layout import CodecTemporalSpec
+    from experiments.build import resolve_model_config
     from scripts.prepared_stage_data import validate_prepared_record
 
     volume.reload()
     config = yaml.safe_load(CONFIG_PATH.read_text())
+    _, model_config = resolve_model_config(config)
     manifest = json.loads(MANIFEST_PATH.read_text())
     temporal = resolve_temporal_protocol(config)
     layout = temporal.layout(
         CodecTemporalSpec(8),
-        temporal_patch_size=config["model"]["patch_size"][0],
+        temporal_patch_size=model_config.patch_size[0],
         purpose="train",
     )
     if manifest["manifest_sha256"] != _manifest_id(manifest):
@@ -159,13 +161,13 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     sys.path.insert(0, "/opt/tiny-iwm")
     os.chdir("/opt/tiny-iwm")
     from algorithms.world_model.flow import FlowMatchSpec, flow_matching_loss
-    from algorithms.world_model.models import JointVideoDiT, JointVideoDiTConfig
     from algorithms.world_model.training_batch import (
         ChunkCausalVisibility,
         StageBBatchBuilder,
     )
     from core.types import VideoBatch
     from core.video_layout import CodecTemporalSpec, VideoLayout
+    from experiments.build import build_model
     from inference.history import HistoryIdentity, HistorySession
     from runtime import (
         CheckpointProvenance,
@@ -228,14 +230,8 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
     torch.cuda.manual_seed_all(seed)
     configure_cuda_math_policy()
     device, dtype = torch.device("cuda"), torch.bfloat16
-    model = JointVideoDiT(
-        JointVideoDiTConfig(
-            **{
-                **config["model"],
-                "patch_size": tuple(config["model"]["patch_size"]),
-            }
-        )
-    ).to(device=device, dtype=torch.float32)
+    model_build = build_model(config)
+    model = model_build.model.to(device=device, dtype=torch.float32)
     optimizer = build_optimizer(
         model,
         OptimizerSpec(
@@ -375,7 +371,7 @@ def train(preflight_json: str, verify_only: bool = False) -> str:
         run_id=config["run_id"],
         stage="B",
         model={
-            "architecture": "joint_spatiotemporal_dit",
+            "architecture": model_build.architecture,
             "parameters": sum(p.numel() for p in model.parameters()),
             "config": config["model"],
         },
