@@ -1,4 +1,7 @@
 import pytest
+from pathlib import Path
+
+import yaml
 
 from core.temporal_config import resolve_temporal_protocol
 from core.video_layout import CodecTemporalSpec
@@ -56,6 +59,22 @@ def test_preallocation_validation_rejects_data_and_memory_shortfalls():
         protocol.validate_resources(available_rgb_frames=80)
     with pytest.raises(ValueError, match="exceeds limit"):
         protocol.validate_resources(estimated_gpu_gb=24, maximum_gpu_gb=16)
+    protocol.validate_resources(available_rgb_frames=161, purpose="train")
+    with pytest.raises(ValueError, match="requires 961"):
+        resolve_temporal_protocol(_config(rollout=961)).validate_resources(
+            available_rgb_frames=161, purpose="rollout"
+        )
+
+
+@pytest.mark.parametrize("name", ["stage_a_baseline", "stage_b_baseline"])
+def test_published_run_preserves_original_minute_training_geometry(name):
+    path = Path(__file__).parents[1] / "configurations" / "runs" / f"{name}.yaml"
+    protocol = resolve_temporal_protocol(yaml.safe_load(path.read_text()))
+    assert protocol.train_window_rgb_frames == 961
+    assert protocol.rollout_rgb_frames == 961
+    assert protocol.layout(
+        CodecTemporalSpec(8), temporal_patch_size=1, purpose="train"
+    ).latent_frame_count == 121
 
 
 def test_incompatible_chunk_and_patch_fails_during_layout_resolution():

@@ -11,6 +11,10 @@ from core.video_layout import CodecTemporalSpec, VideoLayout
 
 OFFICIAL_RGB_FRAMES = 961
 OFFICIAL_FPS = 16.0
+LEGACY_RUN_IDS = frozenset({
+    "stage-a-sekai-subset-seed21-v1",
+    "stage-b-sekai-subset-seed21-v2",
+})
 
 
 @dataclass(frozen=True)
@@ -81,11 +85,16 @@ class TemporalProtocol:
         self,
         *,
         available_rgb_frames: int | None = None,
+        purpose: str = "train",
         estimated_gpu_gb: float | None = None,
         maximum_gpu_gb: float | None = None,
     ) -> None:
         """Fail before allocation when data or a supplied memory estimate is insufficient."""
-        required = max(self.train_window_rgb_frames, self.rollout_rgb_frames)
+        if purpose not in {"train", "rollout"}:
+            raise ValueError("purpose must be 'train' or 'rollout'")
+        required = (
+            self.train_window_rgb_frames if purpose == "train" else self.rollout_rgb_frames
+        )
         if available_rgb_frames is not None:
             if type(available_rgb_frames) is not int or available_rgb_frames < 0:
                 raise ValueError("available_rgb_frames must be a non-negative integer")
@@ -113,6 +122,21 @@ class TemporalProtocol:
 
 def resolve_temporal_protocol(config: Mapping[str, Any]) -> TemporalProtocol:
     """Parse the five canonical values without silently truncating user input."""
+    # Only the two published runs use this compatibility path. Keep their old
+    # config bytes and training geometry stable for checkpoints and provenance.
+    if config.get("run_id") in LEGACY_RUN_IDS and not any(
+        key in config for key in ("train", "temporal", "rollout")
+    ):
+        legacy_chunk = config.get("flow_matching", {}).get("latent_frames_per_chunk", 4)
+        if type(legacy_chunk) is not int or legacy_chunk <= 0:
+            raise ValueError("legacy flow_matching.latent_frames_per_chunk must be positive")
+        return TemporalProtocol(
+            train_window_rgb_frames=OFFICIAL_RGB_FRAMES,
+            chunk_latent_frames=legacy_chunk,
+            rollout_rgb_frames=OFFICIAL_RGB_FRAMES,
+            initial_condition_rgb_frames=1,
+            fps=OFFICIAL_FPS,
+        )
     try:
         train = config["train"]
         temporal = config["temporal"]
