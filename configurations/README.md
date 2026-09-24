@@ -28,9 +28,13 @@ Temporal geometry has exactly five inputs: `train.window_rgb_frames`,
 `temporal.initial_condition_rgb_frames`, and `temporal.fps`. Codec padding,
 latent/token/chunk ranges, and physical duration are derived by `VideoLayout`;
 do not repeat FPS, frame counts, or duration in dataset/stage configuration.
-The default uses a 161-frame training window and the named `rollout/minute`
-961-frame preset. Select `rollout=debug_81` for short debugging. Only the
-961-frame, 16 FPS preset is eligible for the formal minute evaluation gate.
+The default Hydra config uses a 161-frame training window and the named
+`rollout/minute` 961-frame preset. Select `rollout=debug_81` for short debugging.
+The published Stage A/B run YAMLs retain their original 961-frame training
+meaning through an explicit compatibility adapter. Only the 961-frame, 16 FPS
+preset is eligible for the formal minute evaluation gate.
+`resources.available_rgb_frames` checks the training source; validate a
+generation source separately with `purpose="rollout"` when generating.
 
 All configurations are automatically saved in wandb run.
 

@@ -3,14 +3,6 @@ run_id: stage-a-sekai-subset-seed21-v1
 issue: CWX-21
 seed: 21
 stage: A
-train:
-  window_rgb_frames: 161
-temporal:
-  chunk_latent_frames: 4
-  initial_condition_rgb_frames: 1
-  fps: 16
-rollout:
-  rgb_frames: 961
 
 data:
   repository: Efficient-Large-Model/SANA-WM-example-training-dataset
