@@ -75,7 +75,7 @@ class CosineDFObjective:
         ):
             raise ValueError("DF timestep_indices must be [B, temporal tokens] within the schedule")
         model_time = torch.zeros(
-            (clean.shape[0], token_count), device=clean.device, dtype=clean.dtype
+            (clean.shape[0], token_count), device=clean.device, dtype=torch.float32
         )
         alpha = torch.ones((clean.shape[0], clean.shape[2]), device=clean.device, dtype=clean.dtype)
         for index, latent_range in enumerate(video.layout.token_to_latent_ranges):
@@ -84,7 +84,7 @@ class CosineDFObjective:
                 raise ValueError("DF temporal patch mixes clean and noisy latents")
             if selected.all():
                 time = timestep_indices[:, index] / self.schedule.train_steps
-                model_time[:, index] = time.to(clean.dtype)
+                model_time[:, index] = time
                 alpha[:, latent_range.start:latent_range.stop] = self.schedule.alpha_bar(time).to(clean.dtype)[:, None]
         coefficient = alpha[:, None, :, None, None]
         noisy = coefficient.sqrt() * clean + (1 - coefficient).sqrt() * noise

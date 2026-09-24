@@ -134,6 +134,32 @@ def test_df_uses_temporal_token_noise_and_exact_clean_history():
         ))
 
 
+def test_df_bf16_latents_keep_adjacent_timestep_conditions_distinct():
+    source = _video()
+    video = VideoBatch(
+        source.sample_ids, source.sources, source.layout, source.camera,
+        latents=source.latents.to(torch.bfloat16),
+    )
+    objective = CosineDFObjective(
+        CosineDFSchedule(train_steps=1000),
+        build_training_policy("teacher_forced_causal"),
+    )
+    noise = torch.full_like(video.latents, 2)
+    first = objective.build_batch(
+        video, target_chunk=1, noise=noise,
+        timestep_indices=torch.tensor([[1, 1, 251, 1, 1, 1]]),
+    )
+    second = objective.build_batch(
+        video, target_chunk=1, noise=noise,
+        timestep_indices=torch.tensor([[1, 1, 252, 1, 1, 1]]),
+    )
+    assert first.noise_condition.dtype == torch.float32
+    assert second.noise_condition.dtype == torch.float32
+    assert first.noise_condition[0, 2] != second.noise_condition[0, 2]
+    assert first.noise_condition[0, 0] == second.noise_condition[0, 0] == 0
+    assert objective.schedule.alpha_bar(first.noise_condition[0, 2]) != objective.schedule.alpha_bar(second.noise_condition[0, 2])
+
+
 @pytest.mark.parametrize("objective", ["native_fm", "minimal_df"])
 def test_same_recipe_training_and_rollout_path(objective):
     torch.manual_seed(7)
@@ -201,3 +227,11 @@ def test_ddim_matches_epsilon_reconstruction_and_differs_from_fm_euler():
         recovered,
         FMEulerSampler().step(state, epsilon, time=torch.tensor([0.5]), next_time=torch.tensor([0.0])),
     )
+
+
+def test_df_grid_stays_strictly_decreasing_with_bf16_latents():
+    sampler = DFDDIMSampler(CosineDFSchedule(train_steps=1000))
+    grid = sampler.grid(400, device=torch.device("cpu"), dtype=torch.bfloat16)
+    assert grid.dtype == torch.float32
+    assert grid[0] == 1 and grid[-1] == 0
+    assert torch.all(grid[:-1] > grid[1:])

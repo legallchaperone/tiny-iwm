@@ -31,7 +31,12 @@ class DFDDIMSampler:
         ).round().to(torch.int64)
         if not torch.all(indices[:-1] > indices[1:]):
             raise ValueError("DF sampling grid must have strictly decreasing timesteps")
-        return (indices / self.schedule.train_steps).to(dtype)
+        # Time conditioning must retain the discrete training levels even when
+        # the latent state is bfloat16. The model accepts fp32 timestep input.
+        grid = indices.to(torch.float32) / self.schedule.train_steps
+        if not torch.all(grid[:-1] > grid[1:]):
+            raise ValueError("DF sampling grid loses distinct timesteps in float32")
+        return grid
 
     def step(
         self, state: torch.Tensor, prediction: torch.Tensor,
