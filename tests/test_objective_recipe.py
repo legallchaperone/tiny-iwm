@@ -235,12 +235,17 @@ def test_df_grid_stays_strictly_decreasing_with_bf16_latents():
     assert grid.dtype == torch.float32
     assert grid[0] == 1 and grid[-1] == 0
     assert torch.all(grid[:-1] > grid[1:])
+    coefficients = sampler.schedule.alpha_bar(grid)
+    assert torch.all(coefficients[1:] > coefficients[:-1])
+    assert grid[1] < 0.998  # skip the floored t=0.998 coefficient
+    with pytest.raises(ValueError, match="distinct schedule levels"):
+        sampler.grid(1000, device=torch.device("cpu"), dtype=torch.bfloat16)
 
 
 def test_ddim_bf16_update_uses_distinct_fp32_schedule_coefficients():
     sampler = DFDDIMSampler(CosineDFSchedule(train_steps=1000))
     grid = sampler.grid(400, device=torch.device("cpu"), dtype=torch.bfloat16)
-    time, next_time = grid[288:289], grid[289:290]
+    time, next_time = grid[290:291], grid[291:292]
     alpha = sampler.schedule.alpha_bar(time)
     next_alpha = sampler.schedule.alpha_bar(next_time)
     assert alpha != next_alpha

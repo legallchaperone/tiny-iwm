@@ -31,11 +31,39 @@ class DFDDIMSampler:
         ).round().to(torch.int64)
         if not torch.all(indices[:-1] > indices[1:]):
             raise ValueError("DF sampling grid must have strictly decreasing timesteps")
+        times = indices.to(torch.float32) / self.schedule.train_steps
+        alpha = self.schedule.alpha_bar(times)
+        if not torch.all(alpha[1:] > alpha[:-1]):
+            # The cosine floor can map several high-noise discrete steps to
+            # the same coefficient. Select from distinct schedule levels while
+            # retaining the t=1 and t=0 endpoints.
+            all_indices = torch.arange(
+                self.schedule.train_steps, -1, -1, device=device
+            )
+            all_alpha = self.schedule.alpha_bar(
+                all_indices.to(torch.float32) / self.schedule.train_steps
+            )
+            keep = torch.cat((
+                torch.ones(1, device=device, dtype=torch.bool),
+                all_alpha[1:] > all_alpha[:-1],
+            ))
+            distinct = all_indices[keep]
+            if distinct[-1] != 0:
+                distinct[-1] = 0
+            if len(distinct) < steps + 1:
+                raise ValueError("DF sampling steps exceed distinct schedule levels")
+            positions = torch.linspace(
+                0, len(distinct) - 1, steps + 1, device=device
+            ).round().to(torch.int64)
+            indices = distinct[positions]
         # Time conditioning must retain the discrete training levels even when
         # the latent state is bfloat16. The model accepts fp32 timestep input.
         grid = indices.to(torch.float32) / self.schedule.train_steps
         if not torch.all(grid[:-1] > grid[1:]):
             raise ValueError("DF sampling grid loses distinct timesteps in float32")
+        coefficients = self.schedule.alpha_bar(grid)
+        if not torch.all(coefficients[1:] > coefficients[:-1]):
+            raise ValueError("DF sampling grid has duplicate schedule coefficients")
         return grid
 
     def step(
