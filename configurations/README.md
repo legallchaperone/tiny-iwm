@@ -76,3 +76,9 @@ The CPU check rejects a mismatched objective, prediction type, policy, or
 sampler. Checkpoint loading also checks objective and prediction semantics
 before changing model or optimizer state. The historical Stage A/B run YAMLs
 still select the native FM recipe.
+
+For bfloat16 or float16 models, the FM and DF samplers retain a float32 latent
+accumulator across denoising steps. Model inputs and completed history chunks
+are cast to the model dtype at those boundaries. This changes generation
+numerics from the earlier all-bfloat16 Euler loop; record the code revision in
+generation identity when comparing saved outputs.

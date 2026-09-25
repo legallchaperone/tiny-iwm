@@ -217,6 +217,30 @@ def test_same_recipe_training_and_rollout_path(objective):
     torch.testing.assert_close(cached, generated, atol=2e-5, rtol=2e-5)
 
 
+@pytest.mark.parametrize("objective", ["native_fm", "minimal_df"])
+def test_bf16_rollout_keeps_model_inputs_compatible_with_fp32_sampler_state(objective):
+    recipe = build_recipe(_small_config(objective))
+    model = recipe.model.model.to(torch.bfloat16).eval()
+    video = _video()
+    initial = video.latents[:, :, :2].to(torch.bfloat16)
+    generated = rollout_latents(
+        model, video.layout,
+        HistoryIdentity("bf16", "checkpoint", "source", "conditional"),
+        (initial,), steps=2, seed=5, mode="reference",
+        sampler=recipe.sampler, objective_name=objective,
+    )
+    cached = rollout_latents(
+        model, video.layout,
+        HistoryIdentity("bf16", "checkpoint", "source", "conditional"),
+        (initial,), steps=2, seed=5, mode="cached",
+        sampler=recipe.sampler, objective_name=objective,
+    )
+    assert generated.dtype == torch.bfloat16
+    assert torch.isfinite(generated).all()
+    torch.testing.assert_close(generated[:, :, :2], initial)
+    torch.testing.assert_close(cached, generated, atol=0.05, rtol=0.05)
+
+
 def test_incompatible_recipes_fail_before_model_build():
     cfg = _small_config("minimal_df")
     cfg.sampler.name = "fm_euler"
@@ -321,6 +345,26 @@ def test_fm_bf16_sampler_keeps_dense_timestep_updates():
     assert updated.item() < 0
 
 
+@pytest.mark.parametrize("steps", [400, 1000])
+def test_fm_dense_integration_keeps_accumulator_in_fp32(steps):
+    sampler = FMEulerSampler()
+    state = sampler.initial_state(
+        (1, 1, 1, 1, 1), device=torch.device("cpu"), dtype=torch.bfloat16,
+        generator=torch.Generator().manual_seed(1),
+    )
+    assert state.dtype == torch.float32
+    state.fill_(1)
+    velocity = torch.ones_like(state, dtype=torch.bfloat16)
+    grid = sampler.grid(steps, device=torch.device("cpu"), dtype=torch.bfloat16)
+    for index in range(steps):
+        state = sampler.step(
+            state, velocity,
+            time=grid[index:index + 1], next_time=grid[index + 1:index + 2],
+        )
+    assert state.dtype == torch.float32
+    torch.testing.assert_close(state, torch.zeros_like(state), atol=1e-5, rtol=0)
+
+
 def test_df_grid_stays_strictly_decreasing_with_bf16_latents():
     sampler = DFDDIMSampler(CosineDFSchedule(train_steps=1000))
     grid = sampler.grid(400, device=torch.device("cpu"), dtype=torch.bfloat16)
@@ -355,3 +399,25 @@ def test_ddim_bf16_update_uses_distinct_fp32_schedule_coefficients():
     )
     torch.testing.assert_close(updated, expected.to(torch.bfloat16))
     assert not torch.equal(updated, state)
+
+
+@pytest.mark.parametrize("steps", [1, 16])
+def test_ddim_exact_epsilon_recovers_clean_value_with_fp32_accumulator(steps):
+    sampler = DFDDIMSampler()
+    state = sampler.initial_state(
+        (1, 1, 1, 1, 1), device=torch.device("cpu"), dtype=torch.bfloat16,
+        generator=torch.Generator().manual_seed(1),
+    )
+    assert state.dtype == torch.float32
+    clean = torch.full_like(state, 2)
+    epsilon = torch.full_like(state, 0.25, dtype=torch.bfloat16)
+    alpha = sampler.schedule.alpha_bar(torch.tensor([1.0])).reshape(1, 1, 1, 1, 1)
+    state = alpha.sqrt() * clean + (1 - alpha).sqrt() * epsilon.float()
+    grid = sampler.grid(steps, device=torch.device("cpu"), dtype=torch.bfloat16)
+    for index in range(steps):
+        state = sampler.step(
+            state, epsilon,
+            time=grid[index:index + 1], next_time=grid[index + 1:index + 2],
+        )
+    assert state.dtype == torch.float32
+    torch.testing.assert_close(state, clean, atol=1e-4, rtol=0)

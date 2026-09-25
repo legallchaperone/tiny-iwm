@@ -20,7 +20,10 @@ class DFDDIMSampler:
     ) -> torch.Tensor:
         # The schedule floors alpha at t=1, so pure normal noise is an
         # approximation of the terminal marginal for this minimal recipe.
-        return torch.randn(shape, generator=generator, device=device, dtype=dtype)
+        accumulator_dtype = torch.float64 if dtype == torch.float64 else torch.float32
+        return torch.randn(
+            shape, generator=generator, device=device, dtype=accumulator_dtype
+        )
 
     def grid(self, steps: int, *, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         if type(steps) is not int or not 0 < steps <= self.schedule.train_steps:

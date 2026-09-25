@@ -74,7 +74,10 @@ def rollout_latents(
         for step in range(steps):
             time = time_grid[step].expand(sample.shape[0])
             next_time = time_grid[step + 1].expand(sample.shape[0])
-            prediction = session.predict(identity, index, target, time, mode=mode)
+            # Keep the sampler accumulator at its own precision across steps.
+            prediction = session.predict(
+                identity, index, target.to(sample.dtype), time, mode=mode
+            )
             target = sampler.step(target, prediction, time=time, next_time=next_time)
-        session.commit_clean(identity, index, target)
+        session.commit_clean(identity, index, target.to(sample.dtype))
     return torch.cat(session.history, dim=2)

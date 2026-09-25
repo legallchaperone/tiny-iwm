@@ -17,7 +17,10 @@ class FMEulerSampler:
         self, shape: tuple[int, ...], *, device: torch.device,
         dtype: torch.dtype, generator: torch.Generator,
     ) -> torch.Tensor:
-        return torch.randn(shape, generator=generator, device=device, dtype=dtype)
+        accumulator_dtype = torch.float64 if dtype == torch.float64 else torch.float32
+        return torch.randn(
+            shape, generator=generator, device=device, dtype=accumulator_dtype
+        )
 
     def grid(self, steps: int, *, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         if type(steps) is not int or steps <= 0:
