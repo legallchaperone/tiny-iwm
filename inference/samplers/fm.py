@@ -20,12 +20,23 @@ class FMEulerSampler:
         return torch.randn(shape, generator=generator, device=device, dtype=dtype)
 
     def grid(self, steps: int, *, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-        if steps <= 0:
+        if type(steps) is not int or steps <= 0:
             raise ValueError("FM sampling steps must be positive")
-        return torch.linspace(1, 0, steps + 1, device=device, dtype=dtype)
+        # Keep the time coordinate distinct even for bfloat16 latent states.
+        grid = torch.linspace(1, 0, steps + 1, device=device, dtype=torch.float32)
+        if not torch.all(grid[:-1] > grid[1:]):
+            raise ValueError("FM sampling grid loses distinct float32 timesteps")
+        return grid
 
     def step(
         self, state: torch.Tensor, prediction: torch.Tensor,
         *, time: torch.Tensor, next_time: torch.Tensor,
     ) -> torch.Tensor:
-        return euler_step(state, prediction, time=time, next_time=next_time)
+        # euler_step contains the native FM update. Run it at time-grid
+        # precision before rounding the stored latent state once per step.
+        compute_dtype = torch.float64 if state.dtype == torch.float64 else torch.float32
+        updated = euler_step(
+            state.to(compute_dtype), prediction.to(compute_dtype),
+            time=time, next_time=next_time,
+        )
+        return updated.to(state.dtype)

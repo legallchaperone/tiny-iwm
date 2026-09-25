@@ -229,8 +229,13 @@ def resolve_recipe_selection(root: Mapping[str, Any]) -> tuple[str, str, str, in
         raise ValueError(f"objective {objective_name} requires prediction_type={prediction}")
     if "sampler" in root and root["sampler"].get("prediction_type") != prediction:
         raise ValueError(f"sampler {sampler_name} requires prediction_type={prediction}")
-    if objective_name == "native_fm" and "objective" in root:
-        FlowMatchSpec(**root["objective"].get("flow", {}))
+    if objective_name == "native_fm":
+        flow_values = root.get("objective", {}).get("flow", {})
+        flow_spec = FlowMatchSpec(**flow_values)
+        if flow_spec.time_min != 0.0 or flow_spec.time_max != 1.0:
+            raise ValueError(
+                "sampler fm_euler requires objective.flow.time_min=0 and time_max=1"
+            )
     if objective_name == "minimal_df":
         schedule_values = root.get("objective", {}).get("schedule", {})
         schedule = CosineDFSchedule(**schedule_values)

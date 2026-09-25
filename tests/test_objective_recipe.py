@@ -252,6 +252,16 @@ def test_preflight_rejects_ignored_objective_and_sampler_fields():
         validate_preflight_config(cfg)
 
 
+def test_fm_preflight_rejects_training_bounds_outside_euler_domain():
+    cfg = _small_config("native_fm")
+    cfg.objective.flow.time_min = 0.2
+    cfg.objective.flow.time_max = 0.8
+    with pytest.raises(ValueError, match="fm_euler requires"):
+        validate_preflight_config(cfg)
+    with pytest.raises(ValueError, match="fm_euler requires"):
+        build_recipe(cfg)
+
+
 def test_preflight_rejects_df_step_count_without_distinct_schedule_levels():
     cfg = _small_config("minimal_df")
     cfg.sampler.steps = 1000
@@ -277,6 +287,26 @@ def test_ddim_matches_epsilon_reconstruction_and_differs_from_fm_euler():
         recovered,
         FMEulerSampler().step(state, epsilon, time=torch.tensor([0.5]), next_time=torch.tensor([0.0])),
     )
+
+
+def test_fm_bf16_sampler_keeps_dense_timestep_updates():
+    sampler = FMEulerSampler()
+    grid = sampler.grid(400, device=torch.device("cpu"), dtype=torch.bfloat16)
+    assert grid.dtype == torch.float32
+    assert torch.all(grid[:-1] > grid[1:])
+    collapsed = torch.nonzero(
+        grid[:-1].to(torch.bfloat16) == grid[1:].to(torch.bfloat16)
+    ).flatten()
+    assert len(collapsed) > 0
+    index = int(collapsed[0])
+    state = torch.zeros((1, 1, 1, 1, 1), dtype=torch.bfloat16)
+    velocity = torch.ones_like(state)
+    updated = sampler.step(
+        state, velocity,
+        time=grid[index:index + 1], next_time=grid[index + 1:index + 2],
+    )
+    assert updated.dtype == torch.bfloat16
+    assert updated.item() < 0
 
 
 def test_df_grid_stays_strictly_decreasing_with_bf16_latents():
