@@ -63,6 +63,8 @@ def validate_preflight_config(cfg: DictConfig) -> None:
         raise ValueError(f"multiple resume selectors configured: {', '.join(resume_selectors)}")
     if init_selectors and resume_selectors:
         raise ValueError("checkpoint.init_from and checkpoint.resume_from are mutually exclusive")
+    if cfg.stage.get("name") == "causal_direct" and init_selectors:
+        raise ValueError("stage causal_direct requires random initialization without init_from")
 
     _, model_config = resolve_model_config(cfg)
     resolve_recipe_selection(cfg)

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from hydra import compose, initialize_config_dir
+from omegaconf import open_dict
 import pytest
 import torch
 
@@ -64,6 +65,13 @@ def test_hydra_recipes_select_both_semantics_and_direct_causal_init():
         assert recipe.sampling_steps == 4
         assert cfg.stage.initial_checkpoint is None
         assert cfg.model.initialization == "random"
+
+
+def test_direct_causal_preflight_rejects_parent_checkpoint():
+    cfg = _small_config("minimal_df")
+    cfg.checkpoint.init_from = "stage-a.pt"
+    with pytest.raises(ValueError, match="causal_direct requires random initialization"):
+        validate_preflight_config(cfg)
 
 
 def test_fm_adapter_matches_existing_stage_b_math():
@@ -187,9 +195,14 @@ def test_same_recipe_training_and_rollout_path(objective):
         model, video.layout, identity, initial, steps=2, seed=5,
         mode="reference", sampler=recipe.sampler, objective_name=recipe.objective.name,
     )
+    cached = rollout_latents(
+        model, video.layout, identity, initial, steps=2, seed=5,
+        mode="cached", sampler=recipe.sampler, objective_name=recipe.objective.name,
+    )
     assert generated.shape == video.latents.shape
     assert torch.isfinite(generated).all()
     torch.testing.assert_close(generated[:, :, :2], initial[0])
+    torch.testing.assert_close(cached, generated, atol=2e-5, rtol=2e-5)
 
 
 def test_incompatible_recipes_fail_before_model_build():
@@ -209,6 +222,43 @@ def test_incompatible_recipes_fail_before_model_build():
             (_video().latents[:, :, :2],), steps=1, seed=1,
             sampler=DFDDIMSampler(), objective_name="native_fm",
         )
+
+
+def test_preflight_rejects_silent_policy_and_stage_overrides():
+    cfg = _small_config("minimal_df")
+    cfg.training_policy.visibility = "bidirectional"
+    with pytest.raises(ValueError, match="requires visibility=chunk_causal"):
+        validate_preflight_config(cfg)
+    cfg = _small_config("minimal_df")
+    cfg.stage.attention_visibility = "bidirectional"
+    with pytest.raises(ValueError, match="requires attention_visibility=chunk_causal"):
+        validate_preflight_config(cfg)
+
+
+def test_preflight_rejects_ignored_objective_and_sampler_fields():
+    cfg = _small_config("minimal_df")
+    with open_dict(cfg.sampler):
+        cfg.sampler.noise_scale = 2.0
+    with pytest.raises(ValueError, match="unsupported sampler fields"):
+        validate_preflight_config(cfg)
+    cfg = _small_config("native_fm")
+    with open_dict(cfg.objective):
+        cfg.objective.noise_scale = 2.0
+    with pytest.raises(ValueError, match="unsupported objective fields"):
+        validate_preflight_config(cfg)
+    cfg = _small_config("native_fm")
+    cfg.objective.flow.time_distribution = "logit_normal"
+    with pytest.raises(ValueError, match="only explicit uniform"):
+        validate_preflight_config(cfg)
+
+
+def test_preflight_rejects_df_step_count_without_distinct_schedule_levels():
+    cfg = _small_config("minimal_df")
+    cfg.sampler.steps = 1000
+    with pytest.raises(ValueError, match="distinct schedule levels"):
+        validate_preflight_config(cfg)
+    with pytest.raises(ValueError, match="distinct schedule levels"):
+        build_recipe(cfg)
 
 
 def test_ddim_matches_epsilon_reconstruction_and_differs_from_fm_euler():
