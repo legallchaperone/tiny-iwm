@@ -204,6 +204,15 @@ def resolve_recipe_selection(root: Mapping[str, Any]) -> tuple[str, str, str, in
         )
     if policy_name not in policies:
         raise ValueError(f"objective {objective_name} cannot use policy {policy_name}")
+    stage = root.get("stage")
+    if (
+        objective_name == "minimal_df"
+        and isinstance(stage, Mapping)
+        and stage.get("name") == "causal_tf"
+    ):
+        raise ValueError(
+            "minimal_df requires stage=causal_direct; causal_tf pins a native-FM parent checkpoint"
+        )
     if "objective" in root:
         objective_fields = {"name", "prediction_type", "flow" if objective_name == "native_fm" else "schedule"}
         unknown = set(root["objective"]) - objective_fields

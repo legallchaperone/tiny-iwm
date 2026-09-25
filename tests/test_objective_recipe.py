@@ -74,6 +74,18 @@ def test_direct_causal_preflight_rejects_parent_checkpoint():
         validate_preflight_config(cfg)
 
 
+def test_df_preflight_rejects_historical_fm_checkpoint_stage():
+    with initialize_config_dir(config_dir=str(CONFIG_DIR), version_base=None):
+        cfg = compose(config_name="config", overrides=[
+            "stage=causal_tf", "training_policy=teacher_forced_causal",
+            "objective=minimal_df", "sampler=df_ddim",
+        ])
+    with pytest.raises(ValueError, match="causal_tf pins a native-FM parent checkpoint"):
+        validate_preflight_config(cfg)
+    with pytest.raises(ValueError, match="causal_tf pins a native-FM parent checkpoint"):
+        build_recipe(cfg)
+
+
 def test_fm_adapter_matches_existing_stage_b_math():
     video = _video()
     noise = torch.full_like(video.latents, 2)
