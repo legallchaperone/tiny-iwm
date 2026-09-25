@@ -167,6 +167,30 @@ class TrainingBatch:
 
 
 @dataclass(frozen=True)
+class ObjectiveBatch:
+    """Objective-neutral model inputs and prediction target.
+
+    ``noise_condition`` is either [B] or [B, temporal tokens]. The prediction
+    type is part of the contract so an epsilon target cannot be used as FM
+    velocity. ``loss_time`` retains the scalar FM time used for weighting.
+    """
+
+    model_input: Any
+    noise_condition: Any
+    prediction_target: Any
+    prediction_type: str
+    loss_mask: Any
+    attention_visibility: Any
+    layout: VideoLayout
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    loss_time: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        if self.prediction_type not in {"velocity", "epsilon"}:
+            raise ValueError("prediction_type must be velocity or epsilon")
+
+
+@dataclass(frozen=True)
 class RolloutResult:
     """Immutable identity and outputs of one rollout invocation."""
 

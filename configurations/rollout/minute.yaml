@@ -1,6 +1,5 @@
 rgb_frames: 961
-history_policy: full
-solver: euler
 sampling_steps: 16
+history_policy: full
 cfg_scale: null      # unresolved, and only relevant when text is enabled
 seed: 0

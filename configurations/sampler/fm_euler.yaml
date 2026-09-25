@@ -1,0 +1,3 @@
+name: fm_euler
+prediction_type: velocity
+steps: ${rollout.sampling_steps}

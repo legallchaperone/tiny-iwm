@@ -6,7 +6,7 @@ accidentally beginning an expensive training run.
 """
 
 from .exp_base import BaseExperiment
-from .build import BuiltModel, build_model
+from .build import BuiltModel, BuiltRecipe, build_model, build_recipe
 
 
 class WorldModelExperiment(BaseExperiment):
@@ -15,3 +15,7 @@ class WorldModelExperiment(BaseExperiment):
     def build_model(self) -> BuiltModel:
         """Use the same resolved model construction as launchers and inference."""
         return build_model(self.root_cfg)
+
+    def build_recipe(self) -> BuiltRecipe:
+        """Build a checked training and generation recipe from the same config."""
+        return build_recipe(self.root_cfg)

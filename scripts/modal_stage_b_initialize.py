@@ -70,6 +70,7 @@ def initialize(
                 "temporal_compression": 8, "spatial_compression": 32,
             },
             camera={"pose_convention": "camera_to_world", "intrinsics_space": "rgb_pixels"},
+            semantics={"objective": "native_fm", "prediction_type": "velocity"},
         ),
     )
     if (
@@ -100,6 +101,7 @@ def initialize(
         },
         resolved_config={"stage": stage_config},
         parent_checkpoint_id=initialized.parent_checkpoint_id,
+        semantics={"objective": "native_fm", "prediction_type": "velocity"},
     )
     checkpoint_id = save_checkpoint(
         destination, model=model, optimizer=initialized.optimizer,

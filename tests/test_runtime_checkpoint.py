@@ -17,6 +17,7 @@ from runtime import (
     initialize_new_stage,
     resume_same_run,
     save_checkpoint,
+    validate_checkpoint_provenance,
 )
 
 
@@ -154,6 +155,79 @@ def test_resume_rejects_a_different_run_identity(tmp_path):
             scheduler=scheduler,
             ema=ema,
         )
+
+
+def test_checkpoint_objective_mismatch_rejected_before_weight_mutation(tmp_path):
+    source = _model()
+    optimizer, scheduler, ema = _runtime(source)
+    path = tmp_path / "fm.pt"
+    provenance = CheckpointProvenance(
+        run_id="fm-run", stage="A",
+        model={"architecture": "tiny-test"}, codec={"id": "codec"},
+        camera={"method": "test"}, resolved_config={"seed": 4},
+        semantics={"objective": "native_fm", "prediction_type": "velocity"},
+    )
+    save_checkpoint(
+        path, model=source, optimizer=optimizer, scheduler=scheduler, ema=ema,
+        global_step=1, epoch=0, provenance=provenance,
+    )
+    target = _model()
+    with torch.no_grad():
+        for parameter in target.parameters():
+            parameter.zero_()
+    before = {name: value.clone() for name, value in target.state_dict().items()}
+    target_optimizer, target_scheduler, target_ema = _runtime(target)
+    df = {"objective": "minimal_df", "prediction_type": "epsilon"}
+    with pytest.raises(ValueError, match="semantics.objective"):
+        resume_same_run(
+            path, expected_run_id="fm-run", model=target, optimizer=target_optimizer,
+            scheduler=target_scheduler, ema=target_ema, expected_semantics=df,
+        )
+    with pytest.raises(ValueError, match="semantics.objective"):
+        initialize_new_stage(
+            path, model=target, optimizer_factory=lambda model: build_optimizer(model, OptimizerSpec()),
+            scheduler_factory=lambda opt: build_scheduler(opt, SchedulerSpec()),
+            ema_decay=0.9,
+            expected_compatibility=CheckpointCompatibility(
+                model={"architecture": "tiny-test"}, codec={"id": "codec"},
+                camera={"method": "test"}, semantics=df,
+            ),
+        )
+    for name, value in target.state_dict().items():
+        torch.testing.assert_close(value, before[name])
+
+
+def test_pinned_legacy_stage_b_initialization_resumes_as_fm(tmp_path):
+    model = _model()
+    optimizer, scheduler, ema = _runtime(model)
+    path = tmp_path / "stage-b-init.pt"
+    save_checkpoint(
+        path, model=model, optimizer=optimizer, scheduler=scheduler, ema=ema,
+        global_step=0, epoch=0,
+        provenance=CheckpointProvenance(
+            run_id="stage-b-sekai-subset-seed21-v2", stage="B",
+            model={"architecture": "tiny-test"}, codec={"id": "codec"},
+            camera={"method": "test"},
+            resolved_config={"stage": {"name": "causal_tf", "df_timestep_mixture": False}},
+        ),
+    )
+    resumed = resume_same_run(
+        path, expected_run_id="stage-b-sekai-subset-seed21-v2",
+        model=model, optimizer=optimizer, scheduler=scheduler, ema=ema,
+        expected_semantics={"objective": "native_fm", "prediction_type": "velocity"},
+    )
+    expected = CheckpointProvenance(
+        run_id="stage-b-sekai-subset-seed21-v2", stage="B",
+        model={"architecture": "tiny-test"}, codec={"id": "codec"},
+        camera={"method": "test"},
+        resolved_config={"stage": {"name": "causal_tf", "df_timestep_mixture": False}},
+        semantics={"objective": "native_fm", "prediction_type": "velocity"},
+    )
+    validate_checkpoint_provenance(resumed.provenance, expected)
+    changed = dict(resumed.provenance)
+    changed["camera"] = {"method": "different"}
+    with pytest.raises(ValueError, match="provenance differs"):
+        validate_checkpoint_provenance(changed, expected)
 
 
 @pytest.mark.parametrize("source_weights", ["model", "ema"])
